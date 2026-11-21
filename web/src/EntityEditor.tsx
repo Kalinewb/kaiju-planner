@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { KINDS, fieldCategory, hasUnapprovedChanges } from '../../shared/schema.ts';
+import { descendantIds, pathTo } from '../../shared/tree.ts';
 import type { Entity } from '../../shared/schema.ts';
 import { api, ApiError } from './api.ts';
 import { Button, CategoryBadge, Confirm, cx, StatusBadge, fmtDate } from './ui.tsx';
@@ -58,6 +59,17 @@ export function EntityEditor({ entity, kind, projectId, options = {}, initial, h
     catch (x) { if (x instanceof ApiError && x.status === 409 && x.body?.references) setAskDelete({ references: x.body.references }); else setErr((x as Error).message); }
   }
 
+  // Choices for a "points to" field. A component cannot be placed inside itself or its own contents.
+  const refOptions = (f: { key: string; refKind?: string }) => {
+    const all = options[f.refKind!] ?? [];
+    let list = all.filter((o) => f.refKind !== 'feature' || kind !== 'task' || o.approved);
+    if (f.refKind === 'part') {
+      if (kind === 'part' && f.key === 'parent_id' && entity) { const bad = new Set([entity.id, ...descendantIds(all, entity.id)]); list = list.filter((o) => !bad.has(o.id)); }
+      return list.map((o) => ({ id: o.id, label: pathTo(all, o.id).map((x) => x.title || 'Untitled').join(' › ') })).sort((a, b) => a.label.localeCompare(b.label));
+    }
+    return list.map((o) => ({ id: o.id, label: o.title }));
+  };
+
   const live = entity ? { ...entity, data, flags: flags as Entity['flags'] } : null;
   const unapproved = entity ? hasUnapprovedChanges({ data, approved: entity.approved }) : false;
 
@@ -90,12 +102,15 @@ export function EntityEditor({ entity, kind, projectId, options = {}, initial, h
             ) : f.type === 'ref' ? (
               <select id={id} value={data[f.key] ?? ''} onChange={(e) => set(f.key, e.target.value)}>
                 <option value="">— none —</option>
-                {(options[f.refKind!] ?? []).filter((o) => f.refKind !== 'feature' || kind !== 'task' || o.approved).map((o) => <option key={o.id} value={o.id}>{o.title}</option>)}
+                {refOptions(f).map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
               </select>
             ) : f.type === 'date' ? (
               <input id={id} type="date" value={data[f.key] ?? ''} onChange={(e) => set(f.key, e.target.value)} />
             ) : (
-              <input id={id} value={data[f.key] ?? ''} onChange={(e) => set(f.key, e.target.value)} className={cx(cat === 'ai' && 'ai-suggestion')} />
+              <>
+                <input id={id} list={f.suggestions ? `${id}-list` : undefined} value={data[f.key] ?? ''} onChange={(e) => set(f.key, e.target.value)} className={cx(cat === 'ai' && 'ai-suggestion')} />
+                {f.suggestions && <datalist id={`${id}-list`}>{f.suggestions.map((o) => <option key={o} value={o} />)}</datalist>}
+              </>
             )}
             {f.type !== 'select' && f.type !== 'ref' && f.type !== 'date' && (
               <div className="mt-1 flex gap-3 text-xs text-muted">

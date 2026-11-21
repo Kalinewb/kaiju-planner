@@ -6,28 +6,29 @@ import { api } from './api.ts';
 import { Button, Card, Empty, PageHeader, StatusBadge, fmtDate, useAsync } from './ui.tsx';
 import { EntityEditor } from './EntityEditor.tsx';
 import { useProject } from './App.tsx';
+import { useScope } from './scope.tsx';
 
 const HELP: Record<string, string> = {
-  part: 'Split the project into logical sections. A dependency here simply means "this part may need something from that part". You decide what is linked.',
   decision: 'Write down important choices so you can find out later what was decided and why. Nothing is marked decided until you approve it.',
   doc: 'Notes about how the application is built. Store whatever you know. You do not need to understand every detail.',
   debt: 'Things that work for now but may cause trouble later (like a temporary fix). Only you add items here.',
 };
 
-export function Collection({ kind }: { kind: 'part' | 'decision' | 'doc' | 'debt' }) {
+export function Collection({ kind }: { kind: 'decision' | 'doc' | 'debt' }) {
   const { project } = useProject();
+  const scope = useScope();
   const def = KINDS[kind];
   const items = useAsync(() => api.list({ project: project.id, kind }), [project.id, kind]);
   const parts = useAsync(() => api.list({ project: project.id, kind: 'part' }), [project.id]);
   const feats = useAsync(() => api.list({ project: project.id, kind: 'feature' }), [project.id]);
   const [open, setOpen] = useState<Entity | 'new' | null>(null);
   const [q, setQ] = useState('');
-  const list = (items.data ?? []).filter((e) => !q || (e.title + JSON.stringify(e.data)).toLowerCase().includes(q.toLowerCase()));
+  const list = (items.data ?? []).filter((e) => (!scope.ids || scope.ids.has(e.data.part_id)) && (!q || (e.title + JSON.stringify(e.data)).toLowerCase().includes(q.toLowerCase())));
   const groups = kind === 'doc' ? DOC_SECTIONS.map((s) => ({ name: s, items: list.filter((e) => (e.data.section || 'General') === s) })).filter((g) => g.items.length) : [{ name: '', items: list }];
   const reload = () => { setOpen(null); items.reload(); };
   return (
     <>
-      <PageHeader title={def.kind === 'part' ? 'Application Parts' : def.plural} help={HELP[kind]} actions={<Button variant="primary" onClick={() => setOpen('new')}>Add {def.label.toLowerCase()}</Button>} />
+      <PageHeader title={def.plural} help={HELP[kind]} actions={<Button variant="primary" onClick={() => setOpen('new')}>Add {def.label.toLowerCase()}</Button>} />
       <input aria-label="Search" placeholder="Search…" className="mb-4 max-w-sm" value={q} onChange={(e) => setQ(e.target.value)} />
       {items.data && list.length === 0 && <Empty>{items.data.length ? 'Nothing matches.' : `No ${def.plural.toLowerCase()} yet.`}</Empty>}
       {groups.map((g) => (
@@ -35,12 +36,10 @@ export function Collection({ kind }: { kind: 'part' | 'decision' | 'doc' | 'debt
           {g.name && <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted">{g.name}</h2>}
           <div className="grid gap-3 md:grid-cols-2">
             {g.items.map((e) => {
-              const fs = kind === 'part' ? (feats.data ?? []).filter((f) => f.data.part_id === e.id) : [];
               return (
                 <button key={e.id} onClick={() => setOpen(e)} className="rounded-xl border border-line bg-panel p-4 text-left hover:border-accent">
                   <div className="flex items-start justify-between gap-2"><span className="font-semibold">{e.title || 'Untitled'}</span>{e.status && <StatusBadge status={e.status} />}</div>
                   <p className="mt-1 line-clamp-2 text-muted">{e.data.description || e.data.purpose || e.data.question || e.data.body || ''}</p>
-                  {kind === 'part' && <p className="mt-2 text-xs text-muted">{fs.length} feature(s){fs.length ? ': ' + fs.slice(0, 3).map((f) => f.title).join(', ') : ''}</p>}
                   {e.approved && <p className="mt-1 text-xs text-ok">Approved {fmtDate(e.approved_at)}</p>}
                 </button>);
             })}
@@ -50,12 +49,8 @@ export function Collection({ kind }: { kind: 'part' | 'decision' | 'doc' | 'debt
         <div className="fixed inset-0 z-40 flex justify-end bg-black/40" onClick={() => setOpen(null)}>
           <div className="h-full w-full max-w-lg overflow-y-auto bg-panel p-5" onClick={(ev) => ev.stopPropagation()}>
             <div className="mb-3 flex justify-between"><h2 className="text-lg font-semibold">{open === 'new' ? `New ${def.label.toLowerCase()}` : open.title}</h2><Button variant="ghost" onClick={() => setOpen(null)}>Close</Button></div>
-            <EntityEditor key={open === 'new' ? 'new' : open.updated_at} kind={kind} entity={open === 'new' ? undefined : open} projectId={project.id} options={{ part: parts.data ?? [], feature: feats.data ?? [] }}
+            <EntityEditor key={open === 'new' ? 'new' : open.updated_at} kind={kind} entity={open === 'new' ? undefined : open} initial={scope.nodeId ? { part_id: scope.nodeId } : undefined} projectId={project.id} options={{ part: parts.data ?? [], feature: feats.data ?? [] }}
               onSaved={(e) => { if (open === 'new') reload(); else { items.reload(); setOpen(e); } }} onDeleted={reload} />
-            {kind === 'part' && open !== 'new' && (
-              <div className="mt-5 border-t border-line pt-4"><h3 className="mb-1 font-medium">Related features</h3>
-                <ul className="text-sm">{(feats.data ?? []).filter((f) => f.data.part_id === open.id).map((f) => <li key={f.id}><Link className="text-accent" to={`../features/${f.id}`}>{f.title}</Link> <StatusBadge status={f.status} /></li>)}</ul>
-                <p className="mt-2 text-xs text-muted">Features join a part from the feature's own page.</p></div>)}
           </div>
         </div>)}
     </>

@@ -28,13 +28,28 @@ function fieldsFor(kind: string, raw: Record<string, unknown>, warnings: string[
   const refKeys = new Set(def.fields.filter((f) => f.type === 'ref').map((f) => f.key));
   for (const [k, v] of Object.entries(raw)) {
     const f = def.fields.find((x) => x.key === k);
-    if (!f || f.hidden || refKeys.has(k) || k === 'original_input') { if (!['part', 'feature', 'status_hint', 'features', 'status'].includes(k)) warnings.push(`${label}: ignored unknown or protected field "${k}"`); continue; }
+    if (!f || f.hidden || refKeys.has(k) || k === 'original_input') { if (!['part', 'parent', 'feature', 'status_hint', 'features', 'status'].includes(k)) warnings.push(`${label}: ignored unknown or protected field "${k}"`); continue; }
     if (f.type === 'select' && typeof v === 'string' && !f.options!.includes(v)) { warnings.push(`${label}: "${v}" is not a valid value for ${f.label}, left empty`); continue; }
     const val = Array.isArray(v) ? v.filter((x) => typeof x === 'string').join('\n') : v;
     if (typeof val !== 'string') { warnings.push(`${label}: "${k}" must be text`); continue; }
     if (val.trim()) out[k] = val.trim().slice(0, 20000);
   }
   return out;
+}
+
+/** Parents first, so "parent" names resolve no matter what order they were listed in. */
+function orderParts(items: any[]): [number, any][] {
+  const names = new Set(items.map((x) => norm(x?.name)));
+  const pending = items.map((x, i) => [i, x] as [number, any]);
+  const out: [number, any][] = []; const done = new Set<string>();
+  for (let pass = 0; pass <= items.length && pending.length; pass++) {
+    for (let k = 0; k < pending.length; k++) {
+      const [, x] = pending[k];
+      const par = norm(x?.parent);
+      if (!par || !names.has(par) || done.has(par)) { out.push(pending[k]); done.add(norm(x?.name)); pending.splice(k--, 1); }
+    }
+  }
+  return [...out, ...pending];
 }
 
 export function bulkImport(store: Store, payload: any, opts: { dry_run?: boolean } = {}): BulkReport {
@@ -73,7 +88,8 @@ export function bulkImport(store: Store, payload: any, opts: { dry_run?: boolean
       const items = payload[key];
       if (items === undefined) continue;
       if (!Array.isArray(items)) throw new HttpError(400, `"${key}" must be a list.`);
-      for (const [i, raw] of items.entries()) {
+      const ordered: [number, any][] = key === 'parts' ? orderParts(items) : items.map((x: any, i: number) => [i, x] as [number, any]);
+      for (const [i, raw] of ordered) {
         const label = `${key}[${i}]`;
         if (!raw || typeof raw !== 'object') { report.warnings.push(`${label}: not an object, skipped`); continue; }
         const def = KINDS[kind];
@@ -84,7 +100,7 @@ export function bulkImport(store: Store, payload: any, opts: { dry_run?: boolean
 
         // references by name
         const refs: Record<string, string> = {};
-        const refWanted: [string, string, unknown][] = [['part_id', 'part', raw.part], ['feature_id', 'feature', raw.feature]];
+        const refWanted: [string, string, unknown][] = [['part_id', 'part', raw.part], ['feature_id', 'feature', raw.feature], ['parent_id', 'part', raw.parent]];
         let bad = '';
         for (const [field, refKind, name] of refWanted) {
           if (!name || !def.fields.some((f) => f.key === field)) continue;

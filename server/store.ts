@@ -86,6 +86,23 @@ export class Store {
     }
   }
 
+  /** A component cannot live inside itself or inside something it contains, and the tree stays a sensible depth. */
+  private checkParent(id: string | null, data: Record<string, string>) {
+    const parent = data.parent_id;
+    if (!parent) return;
+    if (id && parent === id) throw new HttpError(400, 'A component cannot live inside itself.');
+    let depth = 1; let cur: string | undefined = parent;
+    const seen = new Set<string>();
+    while (cur) {
+      if (id && cur === id) throw new HttpError(400, 'That would put it inside something it contains. Choose a different place.');
+      if (seen.has(cur)) break;
+      seen.add(cur);
+      const row = this.db.prepare('SELECT data FROM entities WHERE id = ?').get(cur) as { data: string } | undefined;
+      cur = row ? (JSON.parse(row.data).parent_id as string | undefined) || undefined : undefined;
+      if (++depth > 12) throw new HttpError(400, 'Components can be nested at most 12 levels deep.');
+    }
+  }
+
   create(input: { kind: string; project_id?: string | null; data?: Record<string, unknown>; status?: string; prov?: Record<string, 'user' | 'ai'>; flags?: Record<string, 'clarify' | 'undecided'>; actor?: string }): Entity {
     const def = KINDS[input.kind];
     if (!def) throw new HttpError(400, 'Unknown kind');
@@ -97,6 +114,7 @@ export class Store {
     }
     const data = this.cleanData(input.kind, input.data ?? {});
     this.checkRefs(project_id, input.kind, data);
+    if (input.kind === 'part') this.checkParent(null, data);
     const status = input.status ?? def.statuses?.[0] ?? '';
     this.checkStatusAllowed(def.kind, status, false);
     const id = randomUUID();
@@ -121,6 +139,7 @@ export class Store {
     if (e.kind === 'feature' && e.data.original_input) delete incoming.original_input;
     const data = { ...e.data, ...incoming };
     this.checkRefs(e.project_id, e.kind, data);
+    if (e.kind === 'part') this.checkParent(e.id, data);
     const prov = { ...e.prov };
     for (const k of Object.keys(incoming)) prov[k] = patch.prov?.[k] ?? 'user';
     const flags = { ...e.flags };

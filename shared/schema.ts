@@ -12,6 +12,7 @@ export interface Field {
   refKind?: string; // for type 'ref': which kind of record this points to
   futureOnly?: boolean; // only shown for features created through "Future feature planning"
   hidden?: boolean; // stored, but not shown as an editable form field
+  suggestions?: string[]; // free text, but offer these as quick picks
 }
 
 export interface KindDef {
@@ -26,6 +27,7 @@ export interface KindDef {
   fields: Field[];
 }
 
+export const PART_TYPES = ['Plugin', 'Subplugin', 'Addon', 'Integration', 'Module', 'Component'];
 export const PRIORITIES = ['Not set', 'Low', 'Medium', 'High', 'Critical'];
 export const COMPLEXITY = ['Not estimated', 'Small', 'Medium', 'Large', 'Very large'];
 
@@ -72,11 +74,13 @@ export const KINDS: Record<string, KindDef> = {
     ],
   },
   part: {
-    kind: 'part', label: 'Part of the application', plural: 'Parts of the application', titleField: 'name', approvable: true,
-    help: 'A logical section of the application, such as "User accounts" or "Notifications".',
+    kind: 'part', label: 'Component', plural: 'Structure', titleField: 'name', approvable: true,
+    help: 'A building block of the project. It can contain other building blocks, for example a plugin containing subplugins, addons and integrations.',
     statuses: PART_STATUSES,
     fields: [
       t('name', 'Name'),
+      { key: 'type', label: 'What kind of thing is it?', type: 'text', suggestions: PART_TYPES, help: 'For example Plugin, Subplugin, Addon, Integration. Type your own if none fit.' },
+      r('parent_id', 'Lives inside', 'part', 'Leave empty for something at the top level of the project.'),
       l('description', 'Description'),
       l('purpose', 'Purpose', 'Why does this part exist?'),
       l('responsibilities', 'What it is responsible for'),
@@ -95,7 +99,7 @@ export const KINDS: Record<string, KindDef> = {
       l('users', 'Who should use it'),
       l('behavior', 'How you imagine it working'),
       l('expected_result', 'Expected result', 'What should happen, including unusual situations.'),
-      r('part_id', 'Related part of the application', 'part'),
+      r('part_id', 'Component it belongs to', 'part'),
       s('priority', 'Priority', PRIORITIES),
       s('complexity', 'Complexity estimate', COMPLEXITY, 'Your own guess is fine. Leave as "Not estimated" if you are unsure.'),
       l('requirements', 'Requirements', 'One per line. Only approved requirements are given to Claude Code as instructions.'),
@@ -118,7 +122,7 @@ export const KINDS: Record<string, KindDef> = {
       t('name', 'Task name'),
       l('description', 'Description'),
       r('feature_id', 'Related feature', 'feature', 'Only approved features can have tasks.'),
-      r('part_id', 'Related part of the application', 'part'),
+      r('part_id', 'Component it belongs to', 'part'),
       s('priority', 'Priority', PRIORITIES),
       l('acceptance', 'Acceptance criteria'),
       l('technical_notes', 'Technical notes'),
@@ -132,6 +136,7 @@ export const KINDS: Record<string, KindDef> = {
       t('name', 'Name'),
       l('description', 'Description'),
       l('goals', 'Goals'),
+      r('part_id', 'Belongs to', 'part', 'Leave empty for a phase of the whole project.'),
       { key: 'start', label: 'Planned start (optional)', type: 'date', help: 'Only dates you enter are shown. Nothing is guessed.' },
       { key: 'end', label: 'Planned end (optional)', type: 'date' },
     ],
@@ -142,6 +147,7 @@ export const KINDS: Record<string, KindDef> = {
     statuses: DECISION_STATUSES,
     fields: [
       t('name', 'Decision title'),
+      r('part_id', 'Belongs to', 'part', 'Leave empty if it affects the whole project.'),
       l('question', 'What needs to be decided'),
       l('options', 'Available options', 'One per line.'),
       l('pros_cons', 'Advantages and disadvantages'),
@@ -157,6 +163,7 @@ export const KINDS: Record<string, KindDef> = {
     fields: [
       t('name', 'Title'),
       s('section', 'Section', DOC_SECTIONS),
+      r('part_id', 'Belongs to', 'part', 'Leave empty for project-wide documentation.'),
       l('body', 'Content'),
     ],
   },
@@ -168,7 +175,7 @@ export const KINDS: Record<string, KindDef> = {
       t('name', 'Title'),
       l('description', 'What is the issue?'),
       l('why_matters', 'Why might it matter later?'),
-      r('part_id', 'Related part of the application', 'part'),
+      r('part_id', 'Component it belongs to', 'part'),
       r('feature_id', 'Related feature', 'feature'),
     ],
   },

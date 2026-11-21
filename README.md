@@ -16,9 +16,18 @@ It is not a to-do list. It covers the path from an idea to features, tasks, a ro
 
 ## What is in this version
 
-Projects and guided project definition · Parts of the application · Features with guided creation and future-feature planning · Tasks (Kanban) · Roadmap phases · Dependencies and impact check · Decisions · Documentation · Technical debt · Change history · Claude Code briefs (preview, edit, approve, copy, export) · Export/import · Light and dark theme.
+Projects and guided project definition · **Structure: a tree of components** (project → plugin → subplugin → addon / integration, your own types, any depth) · Features with guided creation and future-feature planning · Tasks (Kanban) · Roadmap phases · Dependencies and impact check · Decisions · Documentation · Technical debt · Change history · Claude Code briefs (preview, edit, approve, copy, export) · Export/import · Light and dark theme.
 
 **Optional Claude assistant** (off by default, see below). Everything else works without AI.
+
+## Structure: plugins, subplugins, addons
+
+A project is a **tree of components**. Each component has a type you choose (Plugin, Subplugin, Addon, Integration, Module, or your own) and can live inside another one, to any depth. Features, tasks, roadmap phases, decisions, docs and debt can each belong to a component.
+
+- **Sidebar:** the tree sits under *Structure*. Pick a component and you see **only its own** features, tasks, roadmap, decisions, docs and debt, in tabs. The rarely-needed project-wide pages are folded under *Whole project*.
+- **Roll-up:** tick *Include everything inside it* to see a component together with everything nested in it. Progress and counts on the Structure page include what is inside.
+- **Safe moves:** a component cannot be placed inside itself or its own contents. Deleting one asks first and moves what was inside it to the top level. Nothing is deleted with it.
+- **Claude Code import:** `parts` accept `type` and `parent` (by name, in any order), and phases, decisions and docs accept `part`.
 
 ## The Claude assistant (optional)
 

@@ -94,3 +94,19 @@ export function useAsync<T>(fn: () => Promise<T>, deps: unknown[]) {
 }
 
 export const fmtDate = (iso: string | null | undefined) => iso ? new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : '';
+
+export function Drawer({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
+  useEffect(() => { const h = (e: KeyboardEvent) => e.key === 'Escape' && onClose(); window.addEventListener('keydown', h); return () => window.removeEventListener('keydown', h); }, [onClose]);
+  return (
+    <div className="fixed inset-0 z-40 flex justify-end bg-black/40" onClick={onClose}>
+      <div role="dialog" aria-label={title} className="h-full w-full max-w-lg overflow-y-auto bg-panel p-5" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-3 flex justify-between gap-2"><h2 className="text-lg font-semibold">{title}</h2><Button variant="ghost" onClick={onClose}>Close</Button></div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+export function TypeBadge({ type }: { type?: string }) {
+  return <span className="inline-block whitespace-nowrap rounded bg-accent-soft px-1.5 py-0.5 text-[11px] font-medium text-accent">{type || 'Component'}</span>;
+}

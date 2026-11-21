@@ -7,6 +7,8 @@ import { Overview, Projects, NewProject, ProjectDashboard, Definition } from './
 import { FeaturesPage, FeatureDetail, FeatureWizard } from './features.tsx';
 import { Kanban, Roadmap, Dependencies } from './planning.tsx';
 import { Assistant } from './assistant.tsx';
+import { Structure, NodeLayout, NodeOverview, SidebarTree } from './structure.tsx';
+import { ScopeContext } from './scope.tsx';
 import { Collection, HistoryPage, SettingsPage, GlobalIdeas, GlobalTasks, GlobalDocs, GlobalRoadmaps } from './pages-misc.tsx';
 
 export interface ProjectCtx { project: Entity; reload: () => void }
@@ -64,9 +66,16 @@ function Shell() {
         {pid && project.data && (
           <nav className="mt-5 space-y-0.5 border-t border-line pt-4" aria-label="Project">
             <div className="mb-1 truncate px-3 text-xs font-semibold uppercase tracking-wide text-muted">{project.data.entity.title}</div>
-            {[['', 'Dashboard'], ['definition', 'Project Definition'], ['parts', 'Application Parts'], ['features', 'Features'], ['assistant', 'Planning Assistant'], ['roadmap', 'Roadmap'], ['tasks', 'Tasks'], ['dependencies', 'Dependencies'], ['docs', 'Documentation'], ['decisions', 'Decisions'], ['debt', 'Technical Debt'], ['history', 'Change History']].map(([to, label]) => (
-              <NavLink key={to} to={`/p/${pid}${to ? '/' + to : ''}`} end={to === ''} className={linkCls}>{label}</NavLink>
-            ))}
+            <NavLink to={`/p/${pid}`} end className={linkCls}>Dashboard</NavLink>
+            <NavLink to={`/p/${pid}/definition`} className={linkCls}>Project Definition</NavLink>
+            <NavLink to={`/p/${pid}/structure`} className={linkCls}>Structure</NavLink>
+            <div className="pb-1 pl-1"><SidebarTree pid={pid} /></div>
+            <details className="border-t border-line pt-2" open={/^\/p\/[^/]+\/(features|roadmap|tasks|dependencies|docs|decisions|debt|history|assistant)/.test(loc.pathname)}>
+              <summary className="cursor-pointer select-none px-3 py-1 text-xs font-semibold uppercase tracking-wide text-muted">Whole project</summary>
+              {[['features', 'Features'], ['roadmap', 'Roadmap'], ['tasks', 'Tasks'], ['dependencies', 'Dependencies'], ['docs', 'Documentation'], ['decisions', 'Decisions'], ['debt', 'Technical Debt'], ['history', 'Change History'], ['assistant', 'Planning Assistant']].map(([to, label]) => (
+                <NavLink key={to} to={`/p/${pid}/${to}`} className={linkCls}>{label}</NavLink>
+              ))}
+            </details>
           </nav>
         )}
       </aside>
@@ -90,7 +99,8 @@ function ProjectGate() {
   const { pid } = useParams();
   const ctx = useOutletContext<{ project?: Entity; reload: () => void }>();
   if (!ctx.project || ctx.project.id !== pid) return <p className="text-muted">Loading…</p>;
-  return <Outlet context={ctx} />;
+  const base = `/p/${pid}`;
+  return <ScopeContext.Provider value={{ nodeId: null, includeInside: false, ids: null, base, projectBase: base }}><Outlet context={ctx} /></ScopeContext.Provider>;
 }
 
 export function App() {
@@ -112,7 +122,20 @@ export function App() {
         <Route path="p/:pid" element={<ProjectGate />}>
           <Route index element={<ProjectDashboard />} />
           <Route path="definition" element={<Definition />} />
-          <Route path="parts" element={<Collection kind="part" />} />
+          <Route path="structure" element={<Structure />} />
+          <Route path="parts" element={<Navigate to="../structure" replace />} />
+          <Route path="n/:nid" element={<NodeLayout />}>
+            <Route index element={<NodeOverview />} />
+            <Route path="features" element={<FeaturesPage />} />
+            <Route path="features/new" element={<FeatureWizard />} />
+            <Route path="features/future" element={<FeatureWizard future />} />
+            <Route path="features/:fid" element={<FeatureDetail />} />
+            <Route path="tasks" element={<Kanban />} />
+            <Route path="roadmap" element={<Roadmap />} />
+            <Route path="decisions" element={<Collection kind="decision" />} />
+            <Route path="docs" element={<Collection kind="doc" />} />
+            <Route path="debt" element={<Collection kind="debt" />} />
+          </Route>
           <Route path="features" element={<FeaturesPage />} />
           <Route path="features/new" element={<FeatureWizard />} />
           <Route path="features/future" element={<FeatureWizard future />} />

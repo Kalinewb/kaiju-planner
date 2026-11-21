@@ -3,6 +3,7 @@
 // and anything missing goes under "Questions Before Implementation". Nothing is invented.
 import { KINDS, lines } from './schema.ts';
 import type { Entity, Link } from './schema.ts';
+import { pathTo } from './tree.ts';
 
 export interface BriefInput {
   project: Entity;
@@ -80,7 +81,10 @@ export function buildBrief(inp: BriefInput): { markdown: string; complete: boole
   }
   out.push(section(4, 'Approved requirements (instructions)', fa ? bullets(lines(fa.requirements)) : '_None approved._'));
   out.push(section(5, 'Expected behavior', fa ? [fa.behavior && `**How it should work:** ${fa.behavior}`, fa.expected_result && `**Expected result:** ${fa.expected_result}`].filter(Boolean).join('\n\n') || NONE : NONE));
-  out.push(section(6, 'Related parts of the application', part ? `- **${part.title}**${part.approved?.purpose || part.data.purpose ? `: ${part.approved?.purpose ?? part.data.purpose}` : ''}` : NONE));
+  const trail = part ? pathTo(inp.parts, part.id) : [];
+  out.push(section(6, 'Related parts of the application', part
+    ? `- **${part.title}**${part.data.type ? ` (${part.data.type})` : ''}${part.approved?.purpose || part.data.purpose ? `: ${part.approved?.purpose ?? part.data.purpose}` : ''}${trail.length > 1 ? `\n- Where it sits: ${trail.map((p) => `${p.title}${p.data.type ? ` (${p.data.type})` : ''}`).join(' > ')}` : ''}`
+    : NONE));
   out.push(section(7, 'Confirmed dependencies', bullets(confirmedDeps.map((id) => `${nameOf(id)}`))
     + (possibleDeps.length ? `\n\n**Not confirmed (possible relationships, do not treat as facts):**\n${bullets(possibleDeps.map(nameOf))}` : '')));
   out.push(section(8, 'Relevant existing functionality', bullets(existing.map((f) => `${f.title}${f.approved?.description ? `: ${f.approved.description}` : ''}`))));

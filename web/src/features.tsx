@@ -7,28 +7,30 @@ import type { Brief } from './api.ts';
 import { Button, Card, Confirm, Empty, PageHeader, StatusBadge, fmtDate, useAsync, cx } from './ui.tsx';
 import { EntityEditor } from './EntityEditor.tsx';
 import { useProject } from './App.tsx';
+import { useScope } from './scope.tsx';
 
 export function FeaturesPage() {
   const { project } = useProject();
+  const scope = useScope();
   const feats = useAsync(() => api.list({ project: project.id, kind: 'feature' }), [project.id]);
   const parts = useAsync(() => api.list({ project: project.id, kind: 'part' }), [project.id]);
   const [q, setQ] = useState(''); const [st, setSt] = useState(''); const [part, setPart] = useState('');
-  const items = (feats.data ?? []).filter((f) => (!st || f.status === st) && (!part || f.data.part_id === part) && (!q || (f.title + f.data.description).toLowerCase().includes(q.toLowerCase())));
+  const items = (feats.data ?? []).filter((f) => (!scope.ids || scope.ids.has(f.data.part_id)) && (!st || f.status === st) && (!part || f.data.part_id === part) && (!q || (f.title + f.data.description).toLowerCase().includes(q.toLowerCase())));
   return (
     <>
       <PageHeader title="Features" help="Things you want the application to do. An idea only becomes a requirement when you approve it."
-        actions={<><Link to="features/future"><Button>Plan a future feature</Button></Link><Link to="features/new"><Button variant="primary">Describe a new feature</Button></Link></>} />
+        actions={<><Link to={`${scope.base}/features/future`}><Button>Plan a future feature</Button></Link><Link to={`${scope.base}/features/new`}><Button variant="primary">Describe a new feature</Button></Link></>} />
       <div className="mb-4 flex flex-wrap gap-2">
         <input aria-label="Search features" placeholder="Search…" className="max-w-56" value={q} onChange={(e) => setQ(e.target.value)} />
         <select aria-label="Filter by status" className="max-w-48" value={st} onChange={(e) => setSt(e.target.value)}><option value="">All statuses</option>{FEATURE_STATUSES.map((s) => <option key={s}>{s}</option>)}</select>
-        <select aria-label="Filter by part" className="max-w-48" value={part} onChange={(e) => setPart(e.target.value)}><option value="">All parts</option>{(parts.data ?? []).map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}</select>
+        {!scope.nodeId && <select aria-label="Filter by component" className="max-w-48" value={part} onChange={(e) => setPart(e.target.value)}><option value="">All components</option>{(parts.data ?? []).map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}</select>}
       </div>
       {feats.data && items.length === 0 ? <Empty>{feats.data.length ? 'No features match.' : 'No features yet. Describe your first idea. You can save it unfinished.'}</Empty> : (
         <div className="overflow-hidden rounded-xl border border-line bg-panel">
           {items.map((f) => (
-            <Link key={f.id} to={f.id} className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 py-3 last:border-0 hover:bg-sunken">
+            <Link key={f.id} to={`${scope.base}/features/${f.id}`} className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 py-3 last:border-0 hover:bg-sunken">
               <div className="min-w-0"><div className="font-medium">{f.title || 'Untitled'}</div>
-                <div className="truncate text-xs text-muted">{(parts.data ?? []).find((p) => p.id === f.data.part_id)?.title ?? 'No part set'} · Priority: {f.data.priority || 'Not set'}</div></div>
+                <div className="truncate text-xs text-muted">{(parts.data ?? []).find((p) => p.id === f.data.part_id)?.title ?? 'No component set'} · Priority: {f.data.priority || 'Not set'}</div></div>
               <div className="flex items-center gap-2">{hasUnapprovedChanges(f) && <span className="text-xs text-warn">edits not approved</span>}<StatusBadge status={f.status} /></div>
             </Link>))}
         </div>)}
@@ -82,6 +84,7 @@ function BriefPanel({ target, projectId }: { target: Entity; projectId: string }
 
 export function FeatureDetail() {
   const { project } = useProject();
+  const scope = useScope();
   const { fid } = useParams();
   const nav = useNavigate();
   const f = useAsync(() => api.get(fid!), [fid]);
@@ -110,7 +113,7 @@ export function FeatureDetail() {
   return (
     <>
       <PageHeader title={e.title || 'Untitled feature'} help={e.data.origin ? `Started in: ${e.data.origin}` : undefined}
-        actions={<Link to=".."><Button variant="ghost">← All features</Button></Link>} />
+        actions={<Link to={`${scope.base}/features`}><Button variant="ghost">← All features</Button></Link>} />
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="space-y-4 lg:col-span-2">
           <Card>
@@ -122,7 +125,7 @@ export function FeatureDetail() {
               {!e.approved && <span className="text-sm text-warn">Not approved yet. Press Approve below when the details are right.</span>}
             </div>
             {err && <div role="alert" className="mb-3 text-bad">{err}</div>}
-            <EntityEditor key={e.updated_at} entity={e} kind="feature" options={{ part: parts.data ?? [] }} onSaved={() => f.reload()} onDeleted={() => nav('..')} />
+            <EntityEditor key={e.updated_at} entity={e} kind="feature" options={{ part: parts.data ?? [] }} onSaved={() => f.reload()} onDeleted={() => nav(`${scope.base}/features`)} />
           </Card>
           <BriefPanel target={e} projectId={project.id} />
         </div>
@@ -138,10 +141,10 @@ export function FeatureDetail() {
           </Card>
           <Card><h2 className="mb-2 font-semibold">Relationships</h2>
             <div className="text-xs font-medium uppercase text-muted">Confirmed</div>
-            <ul className="mb-2 text-sm">{rel.confirmed.map((x) => <li key={x.l.id}>{x.dir === 'out' ? `This ${LINK_TYPES[x.l.type]}` : `${x.other.title} ${LINK_TYPES[x.l.type]} this`} {x.dir === 'out' && <Link className="text-accent" to={`../features/${x.other.id}`}>{x.other.title}</Link>}</li>)}{!rel.confirmed.length && <li className="text-muted">None confirmed.</li>}</ul>
+            <ul className="mb-2 text-sm">{rel.confirmed.map((x) => <li key={x.l.id}>{x.dir === 'out' ? `This ${LINK_TYPES[x.l.type]}` : `${x.other.title} ${LINK_TYPES[x.l.type]} this`} {x.dir === 'out' && <Link className="text-accent" to={`${scope.base}/features/${x.other.id}`}>{x.other.title}</Link>}</li>)}{!rel.confirmed.length && <li className="text-muted">None confirmed.</li>}</ul>
             <div className="text-xs font-medium uppercase text-muted">Possible (not confirmed)</div>
             <ul className="text-sm">{rel.possible.map((x) => <li key={x.l.id}>{x.other.title}</li>)}{!rel.possible.length && <li className="text-muted">None.</li>}</ul>
-            <Link className="mt-2 block text-sm text-accent" to="../dependencies">Manage relationships</Link>
+            <Link className="mt-2 block text-sm text-accent" to={`${scope.projectBase}/dependencies`}>Manage relationships</Link>
           </Card>
           <Card><h2 className="mb-2 font-semibold">Roadmap</h2>
             {inPhases.length ? <ul>{inPhases.map((p) => <li key={p.id}>{p.title}</li>)}</ul> : <p className="text-sm text-muted">Not on the roadmap. Add it from the Roadmap page when you decide.</p>}</Card>
@@ -179,6 +182,7 @@ const FUTURE_STEPS: Step[] = [
 
 export function FeatureWizard({ future }: { future?: boolean }) {
   const { project } = useProject();
+  const scope = useScope();
   const nav = useNavigate();
   const steps = future ? FUTURE_STEPS : NOW_STEPS;
   const parts = useAsync(() => api.list({ project: project.id, kind: 'part' }), [project.id]);
@@ -187,7 +191,7 @@ export function FeatureWizard({ future }: { future?: boolean }) {
   const [entity, setEntity] = useState<Entity | null>(null);
   const [data, setData] = useState<Record<string, string>>(future ? { origin: 'Future feature planning' } : { origin: 'Guided creation' });
   const [flags, setFlags] = useState<Record<string, string>>({});
-  const [part, setPart] = useState(''); const [phase, setPhase] = useState('');
+  const [part, setPart] = useState(scope.nodeId ?? ''); const [phase, setPhase] = useState('');
   const [err, setErr] = useState(''); const [busy, setBusy] = useState(false); const [askReject, setAskReject] = useState(false);
   const s = steps[step];
   const F = KINDS.feature.fields;
@@ -205,7 +209,7 @@ export function FeatureWizard({ future }: { future?: boolean }) {
   async function next() { if ('fields' in s && s.fields.includes('name') && !data.name?.trim()) { setErr('Please give it a short name first.'); return; } if (await persist()) setStep(step + 1); }
   async function approve() {
     const e = await persist(); if (!e) return;
-    try { const a = await api.approve(e.id); if (phase) await api.addLink({ project_id: project.id, from_id: a.id, to_id: phase, type: 'phase_feature' }); nav(`/p/${project.id}/features/${a.id}`); } catch (x) { setErr((x as Error).message); }
+    try { const a = await api.approve(e.id); if (phase) await api.addLink({ project_id: project.id, from_id: a.id, to_id: phase, type: 'phase_feature' }); nav(`${scope.base}/features/${a.id}`); } catch (x) { setErr((x as Error).message); }
   }
 
   const answered = F.filter((f) => !f.hidden && (data[f.key] ?? '').trim());
@@ -231,13 +235,13 @@ export function FeatureWizard({ future }: { future?: boolean }) {
                 {k !== 'name' && <label className="mt-1 flex items-center gap-1 text-xs text-muted"><input type="checkbox" className="!w-auto" checked={flags[k] === 'clarify'} onChange={(e) => setFlags({ ...flags, [k]: e.target.checked ? 'clarify' : '' })} /> I am not sure about this yet</label>}
               </div>))}
             {step === 0 && !future && (
-              <div className="mb-3"><label htmlFor="part" className="mb-1 block font-medium">Which part of the application is it for? (optional)</label>
+              <div className="mb-3"><label htmlFor="part" className="mb-1 block font-medium">Which component is it for? (optional)</label>
                 <select id="part" value={part} onChange={(e) => setPart(e.target.value)}><option value="">— not sure yet —</option>{(parts.data ?? []).map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}</select></div>)}
             {err && <div role="alert" className="mb-2 text-bad">{err}</div>}
             <div className="flex flex-wrap gap-2">
               {step > 0 && <Button onClick={() => setStep(step - 1)}>Back</Button>}
               <Button variant="primary" onClick={next} disabled={busy}>{(data[s.fields[s.fields.length - 1]] ?? '').trim() ? 'Next' : 'Skip for now'}</Button>
-              <Button variant="ghost" disabled={busy || !data.name?.trim()} onClick={async () => { const e = await persist(); if (e) nav(`/p/${project.id}/features/${e.id}`); }}>Save and finish later</Button>
+              <Button variant="ghost" disabled={busy || !data.name?.trim()} onClick={async () => { const e = await persist(); if (e) nav(`${scope.base}/features/${e.id}`); }}>Save and finish later</Button>
             </div>
           </>
         )}
@@ -269,14 +273,14 @@ export function FeatureWizard({ future }: { future?: boolean }) {
             <div className="flex flex-wrap gap-2">
               <Button variant="primary" onClick={approve} disabled={busy}>Approve</Button>
               <Button onClick={() => setStep(0)}>Edit</Button>
-              <Button onClick={async () => { const e = await persist(); if (e) nav(`/p/${project.id}/features/${e.id}`); }}>Save as an idea for later</Button>
+              <Button onClick={async () => { const e = await persist(); if (e) nav(`${scope.base}/features/${e.id}`); }}>Save as an idea for later</Button>
               <Button variant="danger" onClick={() => setAskReject(true)}>Reject</Button>
             </div>
           </>
         )}
       </Card>
       {askReject && <Confirm danger title="Reject this idea?" confirmLabel="Reject" body="It is kept and marked Rejected, so you can still see it later. Nothing is deleted."
-        onConfirm={async () => { const e = await persist(); if (e) { await api.setStatus(e.id, 'Rejected'); nav(`/p/${project.id}/features`); } }} onCancel={() => setAskReject(false)} />}
+        onConfirm={async () => { const e = await persist(); if (e) { await api.setStatus(e.id, 'Rejected'); nav(`${scope.base}/features`); } }} onCancel={() => setAskReject(false)} />}
     </div>
   );
 }

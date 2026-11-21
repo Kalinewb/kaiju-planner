@@ -118,7 +118,8 @@ export function buildContext(store: Store, project_id: string): string {
   out.push(`Project: ${p.title} (stage: ${p.status}; definition ${p.approved ? 'approved by the owner' : 'NOT yet approved'})`);
   for (const f of KINDS.project.fields) { const v = clip(p.data[f.key]); if (v && f.key !== 'name') out.push(`- ${f.label}: ${v}`); }
   const parts = all.filter((e) => e.kind === 'part');
-  out.push('Parts of the application: ' + (parts.length ? parts.map((x) => `${x.title}${x.data.purpose ? ` (${clip(x.data.purpose, 120)})` : ''}`).join('; ') : 'none yet'));
+  const parentName = (x: Entity) => parts.find((y) => y.id === x.data.parent_id)?.title;
+  out.push('Components (type; lives inside): ' + (parts.length ? parts.map((x) => `${x.title} [${x.data.type || 'component'}${parentName(x) ? `; inside ${parentName(x)}` : ''}]${x.data.purpose ? ` ${clip(x.data.purpose, 120)}` : ''}`).join('; ') : 'none yet'));
   const feats = all.filter((e) => e.kind === 'feature' && e.status !== 'Rejected');
   out.push('Features:');
   for (const f of feats.slice(0, 60)) out.push(`- [id ${f.id}] ${f.title} | status: ${f.status} | ${f.approved ? 'approved' : 'not approved'} | ${clip(f.data.description, 240)}`);

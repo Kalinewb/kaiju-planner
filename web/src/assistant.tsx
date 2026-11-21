@@ -23,7 +23,7 @@ function ProposalCard({ p, pid, onDismiss }: { p: Proposal; pid: string; onDismi
       {p.my_suggestions.length > 0 && <div className="mt-2"><div className="font-medium">Claude's own ideas (suggestions only, not part of the feature)</div><ul className="list-disc pl-5">{p.my_suggestions.map((q, i) => <li key={i}>{q}</li>)}</ul></div>}
       <p className="mt-2 text-xs text-muted">Keeping it saves a <strong>draft</strong> with status "Proposed". It is not approved. You can edit it and approve it later.</p>
       {err && <div role="alert" className="mt-2 text-bad">{err}</div>}
-      {saved ? <p className="mt-2 text-ok">Saved as a draft. <Link className="underline" to={`../features/${saved}`}>Open it</Link></p> : (
+      {saved ? <p className="mt-2 text-ok">Saved as a draft. <Link className="underline" to={`/p/${pid}/features/${saved}`}>Open it</Link></p> : (
         <div className="mt-3 flex gap-2">
           <Button variant="primary" onClick={async () => { try { setSaved((await api.aiAccept(pid, p)).id); } catch (x) { setErr((x as Error).message); } }}>Keep as a draft feature</Button>
           <Button variant="ghost" onClick={onDismiss}>Dismiss</Button>

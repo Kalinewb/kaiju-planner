@@ -7,6 +7,8 @@ import type { Summary } from './api.ts';
 import { Button, Card, Empty, PageHeader, Progress, StatusBadge, fmtDate, useAsync } from './ui.tsx';
 import { EntityEditor } from './EntityEditor.tsx';
 import { useProject } from './App.tsx';
+import { buildTree, nodeStats } from '../../shared/tree.ts';
+import { TypeBadge } from './ui.tsx';
 
 function Stat({ label, value }: { label: string; value: number | string }) {
   return <div><div className="text-xl font-semibold">{value}</div><div className="text-xs text-muted">{label}</div></div>;
@@ -114,6 +116,7 @@ export function ProjectDashboard() {
   const phases = useAsync(() => api.list({ project: project.id, kind: 'phase' }), [project.id]);
   const feats = useAsync(() => api.list({ project: project.id, kind: 'feature' }), [project.id]);
   const tasks = useAsync(() => api.list({ project: project.id, kind: 'task' }), [project.id]);
+  const parts = useAsync(() => api.list({ project: project.id, kind: 'part' }), [project.id]);
   const s = sum.data;
   if (!s) return <p className="text-muted">Loading…</p>;
   const today = new Date().toISOString().slice(0, 10);
@@ -127,13 +130,25 @@ export function ProjectDashboard() {
     <>
       <PageHeader title={project.title} help={project.data.vision || project.data.description || 'No description yet. Add one in Project Definition.'}
         actions={<select aria-label="Development stage" className="!w-auto" value={project.status} onChange={async (e) => { await api.setStatus(project.id, e.target.value); reload(); }}>{PROJECT_STATUSES.map((x) => <option key={x}>{x}</option>)}</select>} />
-      {!project.approved && <div className="mb-4 rounded-lg bg-warn-soft px-3 py-2 text-warn">The project definition has not been approved yet. <Link className="underline" to="definition">Review it</Link></div>}
-      {project.approved && hasUnapprovedChanges(project) && <div className="mb-4 rounded-lg bg-warn-soft px-3 py-2 text-warn">The project definition has edits you have not approved. <Link className="underline" to="definition">Review them</Link></div>}
+      {!project.approved && <div className="mb-4 rounded-lg bg-warn-soft px-3 py-2 text-warn">The project definition has not been approved yet. <Link className="underline" to={`/p/${project.id}/definition`}>Review it</Link></div>}
+      {project.approved && hasUnapprovedChanges(project) && <div className="mb-4 rounded-lg bg-warn-soft px-3 py-2 text-warn">The project definition has edits you have not approved. <Link className="underline" to={`/p/${project.id}/definition`}>Review them</Link></div>}
       <Card className="mb-4"><div className="mb-1 flex justify-between"><span className="font-medium">Overall progress</span><span>{s.progress}%</span></div><Progress value={s.progress} />
         <div className="mt-1 text-xs text-muted">{s.tasksTotal ? `Based on ${s.tasksTotal} task(s)` : 'No tasks yet, so this is based on completed features.'}</div></Card>
       <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-6">
-        {[['Parts', s.parts], ['Features', s.features], ['Completed', s.featuresCompleted], ['In development', s.featuresInDevelopment], ['Planned / approved', s.featuresPlanned], ['Ideas', s.featuresIdeas]].map(([l, v]) => <Card key={l as string}><Stat label={l as string} value={v as number} /></Card>)}
+        {[['Components', s.parts], ['Features', s.features], ['Completed', s.featuresCompleted], ['In development', s.featuresInDevelopment], ['Planned / approved', s.featuresPlanned], ['Ideas', s.featuresIdeas]].map(([l, v]) => <Card key={l as string}><Stat label={l as string} value={v as number} /></Card>)}
       </div>
+      {parts.data && parts.data.length > 0 && (
+        <Card className="mb-4">
+          <div className="mb-2 flex items-center justify-between"><h2 className="font-semibold">Structure</h2><Link className="text-sm text-accent" to={`/p/${project.id}/structure`}>Open full structure</Link></div>
+          <div className="grid gap-2 md:grid-cols-2">
+            {buildTree(parts.data).map((n) => { const st = nodeStats(parts.data!, feats.data ?? [], tasks.data ?? [], n.part.id, true); return (
+              <Link key={n.part.id} to={`/p/${project.id}/n/${n.part.id}`} className="rounded-lg border border-line p-3 hover:border-accent">
+                <div className="flex items-center gap-2"><TypeBadge type={n.part.data.type} /><span className="font-medium">{n.part.title}</span></div>
+                <div className="mt-1 text-xs text-muted">{st.features} features · {st.tasksOpen} open tasks{n.children.length ? ` · ${n.children.length} inside` : ''}</div>
+                <div className="mt-2"><Progress value={st.progress} /></div>
+              </Link>); })}
+          </div>
+        </Card>)}
       <div className="grid gap-4 md:grid-cols-2">
         <Card><h2 className="mb-2 font-semibold">Open questions</h2>
           {s.openQuestions.length === 0 ? <p className="text-muted">Nothing is marked as unclear or undecided.</p> : (
@@ -142,9 +157,9 @@ export function ProjectDashboard() {
         <Card><h2 className="mb-2 font-semibold">Needs your attention</h2>
           <p className="mb-2 text-xs text-muted">Taken from your own data. Nothing here is a recommendation.</p>
           <ul className="space-y-1">
-            {attention.inDev.map((f) => <li key={f.id}>In development: <Link className="text-accent" to={`features/${f.id}`}>{f.title}</Link></li>)}
+            {attention.inDev.map((f) => <li key={f.id}>In development: <Link className="text-accent" to={`/p/${project.id}/features/${f.id}`}>{f.title}</Link></li>)}
             {attention.inProgress.map((t) => <li key={t.id}>Task in progress: {t.title}</li>)}
-            {attention.noTasks.map((f) => <li key={f.id}>Approved, no tasks yet: <Link className="text-accent" to={`features/${f.id}`}>{f.title}</Link></li>)}
+            {attention.noTasks.map((f) => <li key={f.id}>Approved, no tasks yet: <Link className="text-accent" to={`/p/${project.id}/features/${f.id}`}>{f.title}</Link></li>)}
             {!attention.inDev.length && !attention.inProgress.length && !attention.noTasks.length && <li className="text-muted">Nothing right now.</li>}
           </ul>
         </Card>

@@ -6,9 +6,12 @@ import { api, ApiError } from './api.ts';
 import { Button, Card, Confirm, Empty, Explain, PageHeader, Progress, StatusBadge, cx, useAsync } from './ui.tsx';
 import { EntityEditor } from './EntityEditor.tsx';
 import { useProject } from './App.tsx';
+import { useScope } from './scope.tsx';
+import { taskPart } from '../../shared/tree.ts';
 
 export function Kanban() {
   const { project } = useProject();
+  const scope = useScope();
   const tasks = useAsync(() => api.list({ project: project.id, kind: 'task' }), [project.id]);
   const feats = useAsync(() => api.list({ project: project.id, kind: 'feature' }), [project.id]);
   const parts = useAsync(() => api.list({ project: project.id, kind: 'part' }), [project.id]);
@@ -16,13 +19,13 @@ export function Kanban() {
   const [filter, setFilter] = useState('');
   const [pending, setPending] = useState<{ t: Entity; to: string } | null>(null);
   const [err, setErr] = useState('');
-  const approved = (feats.data ?? []).filter((f) => f.approved);
+  const approved = (feats.data ?? []).filter((f) => f.approved && (!scope.ids || scope.ids.has(f.data.part_id)));
   async function move(t: Entity, to: string, confirmed = false) {
     setErr('');
     try { await api.setStatus(t.id, to, confirmed); setPending(null); tasks.reload(); }
     catch (x) { if (x instanceof ApiError && x.body?.needsConfirmation) setPending({ t, to }); else setErr((x as Error).message); }
   }
-  const items = (tasks.data ?? []).filter((t) => !filter || t.data.feature_id === filter);
+  const items = (tasks.data ?? []).filter((t) => (!scope.ids || scope.ids.has(taskPart(t, feats.data ?? []))) && (!filter || t.data.feature_id === filter));
   return (
     <>
       <PageHeader title="Tasks" help="Small pieces of development work for approved features. Move cards yourself. Nothing is completed automatically."
@@ -49,7 +52,7 @@ export function Kanban() {
         <div className="fixed inset-0 z-40 flex justify-end bg-black/40" onClick={() => setOpen(null)}>
           <div className="h-full w-full max-w-lg overflow-y-auto bg-panel p-5" onClick={(e) => e.stopPropagation()}>
             <div className="mb-3 flex justify-between"><h2 className="text-lg font-semibold">{open === 'new' ? 'New task' : open.title}</h2><Button variant="ghost" onClick={() => setOpen(null)}>Close</Button></div>
-            <EntityEditor kind="task" entity={open === 'new' ? undefined : open} projectId={project.id} options={{ feature: feats.data ?? [], part: parts.data ?? [] }}
+            <EntityEditor kind="task" entity={open === 'new' ? undefined : open} initial={scope.nodeId ? { part_id: scope.nodeId } : undefined} projectId={project.id} options={{ feature: feats.data ?? [], part: parts.data ?? [] }}
               onSaved={() => { setOpen(null); tasks.reload(); }} onDeleted={() => { setOpen(null); tasks.reload(); }} />
           </div>
         </div>)}
@@ -60,6 +63,8 @@ export function Kanban() {
 
 export function Roadmap() {
   const { project } = useProject();
+  const scope = useScope();
+  const allParts = useAsync(() => api.list({ project: project.id, kind: 'part' }), [project.id]);
   const phases = useAsync(() => api.list({ project: project.id, kind: 'phase' }), [project.id]);
   const feats = useAsync(() => api.list({ project: project.id, kind: 'feature' }), [project.id]);
   const tasks = useAsync(() => api.list({ project: project.id, kind: 'task' }), [project.id]);
@@ -68,14 +73,14 @@ export function Roadmap() {
   const [err, setErr] = useState('');
   const [askPhase, setAskPhase] = useState<{ p: Entity; to: string } | null>(null);
   const reload = () => { phases.reload(); links.reload(); };
-  const list = phases.data ?? [];
+  const list = (phases.data ?? []).filter((p) => !scope.ids || scope.ids.has(p.data.part_id));
   async function swap(i: number, d: number) {
     const ids = list.map((p) => p.id); [ids[i], ids[i + d]] = [ids[i + d], ids[i]];
     await fetch('/api/reorder', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ids }) });
     phases.reload();
   }
   const planned = new Set((links.data ?? []).filter((l) => l.type === 'phase_feature').map((l) => l.from_id));
-  const candidates = (feats.data ?? []).filter((f) => f.approved && f.status !== 'Rejected' && !planned.has(f.id));
+  const candidates = (feats.data ?? []).filter((f) => f.approved && f.status !== 'Rejected' && !planned.has(f.id) && (!scope.ids || scope.ids.has(f.data.part_id)));
   return (
     <>
       <PageHeader title="Roadmap" help="Your phases, in the order you choose. Dates appear only if you enter them." actions={<Button variant="primary" onClick={() => setEdit('new')}>Add phase</Button>} />
@@ -90,6 +95,7 @@ export function Roadmap() {
             <Card key={p.id}>
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div><h2 className="text-lg font-semibold">{i + 1}. {p.title}</h2>
+                  {p.data.part_id && !scope.nodeId && <p className="text-xs text-muted">Belongs to: {allParts.data?.find((x) => x.id === p.data.part_id)?.title ?? '?'}</p>}
                   <p className="text-muted">{p.data.description}</p>
                   {p.data.goals && <p className="mt-1 whitespace-pre-wrap text-sm"><span className="text-muted">Goals:</span> {p.data.goals}</p>}
                   {(p.data.start || p.data.end) && <p className="mt-1 text-sm text-muted">{p.data.start || '…'} → {p.data.end || '…'}</p>}</div>
@@ -103,7 +109,7 @@ export function Roadmap() {
               <div className="mt-3"><Progress value={progress} /><div className="mt-1 text-xs text-muted">{fs.length ? `${done} of ${fs.length} planned features completed` : 'No features planned in this phase yet.'}</div></div>
               <ul className="mt-3 space-y-1">{fs.map(({ l, f }) => (
                 <li key={l.id} className="flex items-center justify-between gap-2 rounded-lg bg-sunken px-3 py-1.5">
-                  <Link className="hover:text-accent" to={`../features/${f!.id}`}>{f!.title}</Link>
+                  <Link className="hover:text-accent" to={`${scope.base}/features/${f!.id}`}>{f!.title}</Link>
                   <span className="flex items-center gap-1"><span className="text-xs text-muted">{tasks.data?.filter((t) => t.data.feature_id === f!.id).length ?? 0} tasks</span><StatusBadge status={f!.status} /><Button variant="ghost" aria-label={`Remove ${f!.title} from phase`} onClick={async () => { await api.removeLink(l.id); links.reload(); }}>✕</Button></span>
                 </li>))}</ul>
               {candidates.length > 0 && (
@@ -117,7 +123,7 @@ export function Roadmap() {
         <div className="fixed inset-0 z-40 flex justify-end bg-black/40" onClick={() => setEdit(null)}>
           <div className="h-full w-full max-w-lg overflow-y-auto bg-panel p-5" onClick={(e) => e.stopPropagation()}>
             <div className="mb-3 flex justify-between"><h2 className="text-lg font-semibold">{edit === 'new' ? 'New phase' : edit.title}</h2><Button variant="ghost" onClick={() => setEdit(null)}>Close</Button></div>
-            <EntityEditor kind="phase" entity={edit === 'new' ? undefined : edit} projectId={project.id} onSaved={() => { setEdit(null); reload(); }} onDeleted={() => { setEdit(null); reload(); }} />
+            <EntityEditor kind="phase" entity={edit === 'new' ? undefined : edit} initial={scope.nodeId ? { part_id: scope.nodeId } : undefined} options={{ part: allParts.data ?? [] }} projectId={project.id} onSaved={() => { setEdit(null); reload(); }} onDeleted={() => { setEdit(null); reload(); }} />
           </div>
         </div>)}
     </>
@@ -170,7 +176,7 @@ export function Dependencies() {
             <div className="mt-3 space-y-3 text-sm">
               <div><div className="font-medium">Known (confirmed by you)</div>{mine.filter((l) => l.confirmed).map((l) => <div key={l.id}>{sentence(l)}. A change here <em>may</em> affect "{others(l)?.title}".</div>)}{!mine.some((l) => l.confirmed) && <div className="text-muted">None recorded.</div>}</div>
               <div><div className="font-medium">Possible (not confirmed)</div>{mine.filter((l) => !l.confirmed).map((l) => <div key={l.id}>{sentence(l)}</div>)}{!mine.some((l) => !l.confirmed) && <div className="text-muted">None.</div>}</div>
-              <div><div className="font-medium">Part of the application</div>{part ? <div>{part.title}{unrelated.length ? `. Other features in this part with no recorded link: ${unrelated.map((f) => f.title).join(', ')}. They may or may not be affected. That is worth a look.` : '.'}</div> : <div className="text-muted">No part set for this feature.</div>}</div>
+              <div><div className="font-medium">Component</div>{part ? <div>{part.title}{unrelated.length ? `. Other features in this component with no recorded link: ${unrelated.map((f) => f.title).join(', ')}. They may or may not be affected. That is worth a look.` : '.'}</div> : <div className="text-muted">No component set for this feature.</div>}</div>
               <div><div className="font-medium">Tasks</div>{(tasks.data ?? []).filter((t) => t.data.feature_id === tf.id).map((t) => <div key={t.id}>{t.title} ({t.status})</div>)}{!(tasks.data ?? []).some((t) => t.data.feature_id === tf.id) && <div className="text-muted">None.</div>}</div>
               {(decisions.data ?? []).some((d) => d.status === 'Not decided' || d.status === 'Proposed') && <div><div className="font-medium">Open decisions in this project</div>{(decisions.data ?? []).filter((d) => d.status === 'Not decided' || d.status === 'Proposed').map((d) => <div key={d.id}>{d.title}</div>)}</div>}
               <div className="text-muted">Information needed to judge a change: what exactly would change, and whether the confirmed neighbours above rely on today's behaviour.</div>
