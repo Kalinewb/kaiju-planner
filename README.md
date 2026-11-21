@@ -35,7 +35,7 @@ Turn it on in **Settings** with your own Anthropic API key (console.anthropic.co
 Run this on your **Proxmox host** shell. It creates a small Debian container, installs Node, builds the app and starts it as a service.
 
 ```bash
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/Kalinewb/kaiju-planner/main/ct/kaiju-planner.sh)"
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/Kalinewb/kaiju-planner/main/ct/kaijuplanner.sh)"
 ```
 
 When it finishes, open `http://<container-ip>:3210`. The generated login password is in the container:
@@ -51,7 +51,7 @@ Change it in **Settings → Change password** after logging in. Forgotten it? In
 Run the same command **inside the container** (console), or on the host:
 
 ```bash
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/Kalinewb/kaiju-planner/main/ct/kaiju-planner.sh)"
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/Kalinewb/kaiju-planner/main/ct/kaijuplanner.sh)"
 ```
 
 On an existing container it detects the install and updates. Before updating it saves a copy of your database in `/var/lib/kaiju-planner/pre-update-copies/` (never overwriting an earlier copy).
