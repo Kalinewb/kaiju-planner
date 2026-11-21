@@ -1,0 +1,339 @@
+import type { DatabaseSync } from 'node:sqlite';
+import { randomUUID } from 'node:crypto';
+import { KINDS, FEATURE_NEEDS_APPROVAL } from '../shared/schema.ts';
+import type { Entity, Link } from '../shared/schema.ts';
+
+export class HttpError extends Error {
+  status: number;
+  extra?: unknown;
+  constructor(status: number, message: string, extra?: unknown) {
+    super(message);
+    this.status = status;
+    this.extra = extra;
+  }
+}
+
+const now = () => new Date().toISOString();
+const J = (v: unknown) => JSON.stringify(v);
+
+type Row = Record<string, any>;
+function toEntity(r: Row): Entity {
+  return {
+    id: r.id, project_id: r.project_id, kind: r.kind, status: r.status, title: r.title,
+    data: JSON.parse(r.data), prov: JSON.parse(r.prov), flags: JSON.parse(r.flags),
+    approved: r.approved ? JSON.parse(r.approved) : null, approved_at: r.approved_at,
+    created_at: r.created_at, updated_at: r.updated_at,
+  };
+}
+function toLink(r: Row): Link {
+  return { ...(r as any), confirmed: !!r.confirmed };
+}
+
+export class Store {
+  db: DatabaseSync;
+  constructor(db: DatabaseSync) { this.db = db; }
+
+  // ---------- history ----------
+  log(project_id: string | null, entity_id: string | null, kind: string | null, action: string, summary: string, actor = 'You', before?: unknown, after?: unknown) {
+    this.db.prepare('INSERT INTO history (id,project_id,entity_id,kind,action,summary,actor,at,before,after) VALUES (?,?,?,?,?,?,?,?,?,?)')
+      .run(randomUUID(), project_id, entity_id, kind, action, summary, actor, now(), before === undefined ? null : J(before), after === undefined ? null : J(after));
+  }
+  history(project_id: string | null, limit = 200) {
+    const rows = project_id
+      ? this.db.prepare('SELECT * FROM history WHERE project_id = ? ORDER BY at DESC LIMIT ?').all(project_id, limit)
+      : this.db.prepare('SELECT * FROM history ORDER BY at DESC LIMIT ?').all(limit);
+    return rows.map((r: Row) => ({ ...r, before: r.before ? JSON.parse(r.before) : null, after: r.after ? JSON.parse(r.after) : null }));
+  }
+
+  // ---------- entities ----------
+  get(id: string): Entity {
+    const r = this.db.prepare('SELECT * FROM entities WHERE id = ?').get(id);
+    if (!r) throw new HttpError(404, 'Not found');
+    return toEntity(r);
+  }
+  list(opts: { project_id?: string; kind?: string; q?: string }): Entity[] {
+    const where: string[] = []; const args: string[] = [];
+    if (opts.project_id) { where.push('project_id = ?'); args.push(opts.project_id); }
+    if (opts.kind) { where.push('kind = ?'); args.push(opts.kind); }
+    if (opts.q) { where.push('(title LIKE ? OR data LIKE ?)'); args.push(`%${opts.q}%`, `%${opts.q}%`); }
+    const sql = `SELECT * FROM entities ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY sort, created_at`;
+    return this.db.prepare(sql).all(...args).map(toEntity);
+  }
+
+  private cleanData(kind: string, input: Record<string, unknown>): Record<string, string> {
+    const def = KINDS[kind];
+    const out: Record<string, string> = {};
+    for (const f of def.fields) {
+      const v = input[f.key];
+      if (v === undefined) continue;
+      if (typeof v !== 'string') throw new HttpError(400, `Field "${f.label}" must be text`);
+      out[f.key] = v;
+    }
+    return out;
+  }
+
+  private checkRefs(project_id: string | null, kind: string, data: Record<string, string>) {
+    for (const f of KINDS[kind].fields) {
+      if (f.type !== 'ref') continue;
+      const id = data[f.key];
+      if (!id) continue;
+      const target = this.db.prepare('SELECT * FROM entities WHERE id = ?').get(id) as Row | undefined;
+      if (!target || target.kind !== f.refKind || target.project_id !== project_id)
+        throw new HttpError(400, `"${f.label}" points to something that does not exist in this project`);
+      // Tasks may only belong to approved features
+      if (kind === 'task' && f.key === 'feature_id' && !target.approved)
+        throw new HttpError(409, 'Tasks can only be added to approved features. Approve the feature first.');
+    }
+  }
+
+  create(input: { kind: string; project_id?: string | null; data?: Record<string, unknown>; status?: string; prov?: Record<string, 'user' | 'ai'>; flags?: Record<string, 'clarify' | 'undecided'>; actor?: string }): Entity {
+    const def = KINDS[input.kind];
+    if (!def) throw new HttpError(400, 'Unknown kind');
+    const project_id = input.kind === 'project' ? null : input.project_id ?? null;
+    if (input.kind !== 'project') {
+      if (!project_id) throw new HttpError(400, 'project_id is required');
+      const p = this.db.prepare("SELECT id FROM entities WHERE id = ? AND kind = 'project'").get(project_id);
+      if (!p) throw new HttpError(400, 'Project not found');
+    }
+    const data = this.cleanData(input.kind, input.data ?? {});
+    this.checkRefs(project_id, input.kind, data);
+    const status = input.status ?? def.statuses?.[0] ?? '';
+    this.checkStatusAllowed(def.kind, status, false);
+    const id = randomUUID();
+    const t = now();
+    const title = data[def.titleField] ?? '';
+    const sort = (this.db.prepare('SELECT COALESCE(MAX(sort),0)+1 AS n FROM entities WHERE project_id IS ? AND kind = ?').get(project_id, input.kind) as Row).n;
+    // Keep the very first wording the user typed, separately from later edits
+    if (input.kind === 'feature' && data.original_input === undefined && data.description) data.original_input = data.description;
+    this.db.prepare('INSERT INTO entities (id,project_id,kind,status,title,data,prov,flags,approved,approved_at,sort,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,NULL,NULL,?,?,?)')
+      .run(id, project_id, input.kind, status, title, J(data), J(input.prov ?? {}), J(input.flags ?? {}), sort, t, t);
+    const e = this.get(id);
+    this.log(project_id ?? id, id, input.kind, 'created', `Created ${def.label.toLowerCase()} "${title || 'Untitled'}"`, input.actor ?? 'You', undefined, e.data);
+    return e;
+  }
+
+  update(id: string, patch: { data?: Record<string, unknown>; flags?: Record<string, 'clarify' | 'undecided' | null>; prov?: Record<string, 'user' | 'ai'>; actor?: string }): Entity {
+    const e = this.get(id);
+    const def = KINDS[e.kind];
+    const before = { ...e.data };
+    const incoming = this.cleanData(e.kind, patch.data ?? {});
+    // The user's original words are written once and never replaced
+    if (e.kind === 'feature' && e.data.original_input) delete incoming.original_input;
+    const data = { ...e.data, ...incoming };
+    this.checkRefs(e.project_id, e.kind, data);
+    const prov = { ...e.prov };
+    for (const k of Object.keys(incoming)) prov[k] = patch.prov?.[k] ?? 'user';
+    const flags = { ...e.flags };
+    for (const [k, v] of Object.entries(patch.flags ?? {})) { if (v) flags[k] = v; else delete flags[k]; }
+    const title = data[def.titleField] ?? '';
+    this.db.prepare('UPDATE entities SET data=?, prov=?, flags=?, title=?, updated_at=? WHERE id=?').run(J(data), J(prov), J(flags), title, now(), id);
+    const changed = Object.keys(incoming).filter((k) => (before[k] ?? '') !== (data[k] ?? ''));
+    if (changed.length) {
+      const labels = changed.map((k) => def.fields.find((f) => f.key === k)?.label ?? k).join(', ');
+      const note = e.approved ? ' (approved version kept until you approve the change)' : '';
+      this.log(e.project_id ?? id, id, e.kind, 'edited', `Edited ${def.label.toLowerCase()} "${title}": ${labels}${note}`, patch.actor ?? 'You', before, data);
+    }
+    return this.get(id);
+  }
+
+  private checkStatusAllowed(kind: string, status: string, hasApproval: boolean) {
+    const def = KINDS[kind];
+    if (!def.statuses) return;
+    if (!def.statuses.includes(status)) throw new HttpError(400, `"${status}" is not a valid status`);
+    if (kind === 'feature' && FEATURE_NEEDS_APPROVAL.includes(status) && !hasApproval && status !== undefined)
+      throw new HttpError(409, `A feature cannot be "${status}" until you have approved it.`);
+    if (kind === 'decision' && status === 'Approved' && !hasApproval)
+      throw new HttpError(409, 'Use "Approve" to approve a decision.');
+    if (kind === 'brief' && status === 'Approved' && !hasApproval)
+      throw new HttpError(409, 'Use "Approve" to approve a brief.');
+  }
+
+  setStatus(id: string, status: string, confirmed = false, actor = 'You'): Entity {
+    const e = this.get(id);
+    const def = KINDS[e.kind];
+    if (e.kind === 'feature' || e.kind === 'decision' || e.kind === 'brief') this.checkStatusAllowed(e.kind, status, !!e.approved);
+    else if (!def.statuses?.includes(status)) throw new HttpError(400, `"${status}" is not a valid status`);
+    if (status === 'Completed' && !confirmed)
+      throw new HttpError(409, 'Marking something as completed needs your confirmation.', { needsConfirmation: true });
+    if (e.status === status) return e;
+    this.db.prepare('UPDATE entities SET status=?, updated_at=? WHERE id=?').run(status, now(), id);
+    this.log(e.project_id ?? id, id, e.kind, status === 'Completed' ? 'completed' : 'status', `${def.label} "${e.title}": ${e.status || '(none)'} → ${status}`, actor);
+    return this.get(id);
+  }
+
+  /** The only way something becomes approved. Keeps the previous approved version. */
+  approve(id: string, actor = 'You'): Entity {
+    const e = this.get(id);
+    const def = KINDS[e.kind];
+    if (!def.approvable) throw new HttpError(400, `${def.label}s cannot be approved`);
+    if (!e.title.trim()) throw new HttpError(409, 'Give it a name before approving.');
+    const t = now();
+    if (e.approved) this.db.prepare('INSERT INTO revisions (id,entity_id,approved_at,data) VALUES (?,?,?,?)').run(randomUUID(), id, e.approved_at, J(e.approved));
+    let status = e.status;
+    if (e.kind === 'feature' && !FEATURE_NEEDS_APPROVAL.includes(status)) status = 'Approved';
+    if ((e.kind === 'decision' || e.kind === 'brief')) status = 'Approved';
+    this.db.prepare('UPDATE entities SET approved=?, approved_at=?, status=?, updated_at=? WHERE id=?').run(J(e.data), t, status, t, id);
+    this.log(e.project_id ?? id, id, e.kind, 'approved', `You approved ${def.label.toLowerCase()} "${e.title}"`, actor, e.approved, e.data);
+    return this.get(id);
+  }
+
+  revisions(id: string) {
+    return this.db.prepare('SELECT * FROM revisions WHERE entity_id = ? ORDER BY approved_at DESC').all(id).map((r: Row) => ({ ...r, data: JSON.parse(r.data) }));
+  }
+
+  /** Records that point at this one, so deletion never leaves broken references. */
+  referencedBy(id: string): { id: string; kind: string; title: string; field: string }[] {
+    const e = this.get(id);
+    const out: { id: string; kind: string; title: string; field: string }[] = [];
+    for (const o of this.list({ project_id: e.kind === 'project' ? e.id : e.project_id ?? undefined })) {
+      if (o.id === id) continue;
+      for (const f of KINDS[o.kind].fields) if (f.type === 'ref' && o.data[f.key] === id) out.push({ id: o.id, kind: o.kind, title: o.title, field: f.label });
+    }
+    return out;
+  }
+
+  remove(id: string, force: boolean, actor = 'You') {
+    const e = this.get(id);
+    const refs = e.kind === 'project' ? [] : this.referencedBy(id);
+    if (refs.length && !force)
+      throw new HttpError(409, 'Other records point to this one.', { references: refs });
+    const tx = this.db;
+    tx.exec('BEGIN');
+    try {
+      if (e.kind === 'project') {
+        const ids = this.list({ project_id: id }).map((x) => x.id);
+        for (const x of ids) tx.prepare('DELETE FROM revisions WHERE entity_id = ?').run(x);
+        tx.prepare('DELETE FROM entities WHERE project_id = ?').run(id);
+        tx.prepare('DELETE FROM links WHERE project_id = ?').run(id);
+      } else {
+        for (const ref of refs) {
+          const o = this.get(ref.id);
+          const f = KINDS[o.kind].fields.find((x) => x.label === ref.field)!;
+          const data = { ...o.data, [f.key]: '' };
+          tx.prepare('UPDATE entities SET data=?, updated_at=? WHERE id=?').run(J(data), now(), o.id);
+        }
+        tx.prepare('DELETE FROM links WHERE from_id = ? OR to_id = ?').run(id, id);
+        tx.prepare('DELETE FROM revisions WHERE entity_id = ?').run(id);
+      }
+      tx.prepare('DELETE FROM entities WHERE id = ?').run(id);
+      tx.exec('COMMIT');
+    } catch (err) { tx.exec('ROLLBACK'); throw err; }
+    this.log(e.project_id ?? id, null, e.kind, 'deleted', `Deleted ${KINDS[e.kind].label.toLowerCase()} "${e.title}"`, actor, e.data);
+  }
+
+  // ---------- links ----------
+  links(project_id: string): Link[] {
+    return this.db.prepare('SELECT * FROM links WHERE project_id = ? ORDER BY created_at').all(project_id).map(toLink);
+  }
+  addLink(input: { project_id: string; from_id: string; to_id: string; type: string; confirmed?: boolean; source?: 'user' | 'ai'; note?: string }): Link {
+    const a = this.get(input.from_id); const b = this.get(input.to_id);
+    if (a.project_id !== input.project_id || (input.type !== 'phase_feature' && b.project_id !== input.project_id) || (input.type === 'phase_feature' && b.project_id !== input.project_id))
+      throw new HttpError(400, 'Both records must be in this project');
+    if (input.from_id === input.to_id) throw new HttpError(400, 'Something cannot depend on itself');
+    if (input.type === 'phase_feature' && !a.approved) throw new HttpError(409, 'Only approved features can be added to the roadmap. Approve the feature first.');
+    const dup = this.db.prepare('SELECT id FROM links WHERE from_id=? AND to_id=? AND type=?').get(input.from_id, input.to_id, input.type);
+    if (dup) throw new HttpError(409, 'That relationship already exists');
+    // Suggestions are never confirmed automatically
+    const source = input.source ?? 'user';
+    const confirmed = source === 'ai' ? false : input.confirmed ?? true;
+    const id = randomUUID();
+    this.db.prepare('INSERT INTO links (id,project_id,from_id,to_id,type,confirmed,source,note,created_at) VALUES (?,?,?,?,?,?,?,?,?)')
+      .run(id, input.project_id, input.from_id, input.to_id, input.type, confirmed ? 1 : 0, source, input.note ?? '', now());
+    this.log(input.project_id, id, 'link', 'link', `${confirmed ? 'Linked' : 'Possible link'}: "${a.title}" ↔ "${b.title}" (${input.type})`);
+    return toLink(this.db.prepare('SELECT * FROM links WHERE id=?').get(id) as Row);
+  }
+  confirmLink(id: string) {
+    const r = this.db.prepare('SELECT * FROM links WHERE id=?').get(id) as Row | undefined;
+    if (!r) throw new HttpError(404, 'Not found');
+    this.db.prepare('UPDATE links SET confirmed=1 WHERE id=?').run(id);
+    this.log(r.project_id, id, 'link', 'link', 'You confirmed a possible relationship');
+  }
+  removeLink(id: string) {
+    const r = this.db.prepare('SELECT * FROM links WHERE id=?').get(id) as Row | undefined;
+    if (!r) throw new HttpError(404, 'Not found');
+    this.db.prepare('DELETE FROM links WHERE id=?').run(id);
+    this.log(r.project_id, id, 'link', 'link', 'Removed a relationship');
+  }
+
+  // ---------- ordering ----------
+  reorder(ids: string[]) {
+    const st = this.db.prepare('UPDATE entities SET sort=? WHERE id=?');
+    ids.forEach((id, i) => st.run(i + 1, id));
+  }
+
+  // ---------- summaries ----------
+  summary(project_id: string) {
+    const all = this.list({ project_id });
+    const by = (k: string) => all.filter((e) => e.kind === k);
+    const features = by('feature').filter((f) => f.status !== 'Rejected');
+    const tasks = by('task');
+    const count = (arr: Entity[], ...st: string[]) => arr.filter((x) => st.includes(x.status)).length;
+    const open: { id: string; kind: string; title: string; field: string; flag: string }[] = [];
+    for (const e of all) for (const [field, flag] of Object.entries(e.flags))
+      open.push({ id: e.id, kind: e.kind, title: e.title, field: KINDS[e.kind].fields.find((f) => f.key === field)?.label ?? field, flag });
+    const doneFeatures = count(features, 'Completed');
+    const progress = tasks.length ? Math.round((count(tasks, 'Completed') / tasks.length) * 100) : features.length ? Math.round((doneFeatures / features.length) * 100) : 0;
+    return {
+      features: features.length,
+      featuresCompleted: doneFeatures,
+      featuresInDevelopment: count(features, 'In development', 'Testing'),
+      featuresPlanned: count(features, 'Approved', 'Planned'),
+      featuresIdeas: count(features, 'Idea', 'Proposed', 'Needs clarification', 'Under review'),
+      tasksOpen: tasks.filter((t) => t.status !== 'Completed').length,
+      tasksTotal: tasks.length,
+      parts: by('part').length,
+      progress,
+      openQuestions: open,
+      recent: this.history(project_id, 8),
+    };
+  }
+
+  // ---------- export / import ----------
+  export(project_id?: string) {
+    const projects = project_id ? [this.get(project_id)] : this.list({ kind: 'project' });
+    const ids = projects.map((p) => p.id);
+    const entities = ids.flatMap((pid) => [this.get(pid), ...this.list({ project_id: pid })]);
+    const eids = new Set(entities.map((e) => e.id));
+    return {
+      format: 'kaiju-planner-export', version: 1, exported_at: now(),
+      entities: entities.map((e) => ({ ...e, sort: (this.db.prepare('SELECT sort FROM entities WHERE id=?').get(e.id) as Row).sort })),
+      revisions: [...eids].flatMap((id) => this.revisions(id).map((r: any) => ({ ...r, entity_id: id }))),
+      links: ids.flatMap((pid) => this.links(pid)),
+      history: ids.flatMap((pid) => this.history(pid, 100000)),
+    };
+  }
+
+  /** Imports as NEW projects with fresh ids. Never replaces or merges existing data. */
+  import(file: any) {
+    if (!file || file.format !== 'kaiju-planner-export' || file.version !== 1 || !Array.isArray(file.entities))
+      throw new HttpError(400, 'This is not a Kaiju Planner export file.');
+    const map = new Map<string, string>();
+    for (const e of file.entities) map.set(e.id, randomUUID());
+    const m = (id: string | null) => (id ? map.get(id) ?? id : id);
+    const suffix = ` (imported ${new Date().toISOString().slice(0, 10)})`;
+    this.db.exec('BEGIN');
+    try {
+      let n = 0;
+      for (const e of file.entities) {
+        const def = KINDS[e.kind];
+        if (!def) throw new HttpError(400, `Unknown record type "${e.kind}" in file`);
+        const data = { ...e.data };
+        for (const f of def.fields) if (f.type === 'ref' && data[f.key]) data[f.key] = map.get(data[f.key]) ?? '';
+        if (e.kind === 'project') data.name = (data.name || 'Untitled') + suffix;
+        const approved = e.approved ? { ...e.approved } : null;
+        if (approved) for (const f of def.fields) if (f.type === 'ref' && approved[f.key]) approved[f.key] = map.get(approved[f.key]) ?? '';
+        if (e.kind === 'project' && approved) approved.name = (approved.name || 'Untitled') + suffix;
+        this.db.prepare('INSERT INTO entities (id,project_id,kind,status,title,data,prov,flags,approved,approved_at,sort,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)')
+          .run(m(e.id), m(e.project_id), e.kind, e.status, e.kind === 'project' ? data.name : e.title, J(data), J(e.prov ?? {}), J(e.flags ?? {}), approved ? J(approved) : null, e.approved_at ?? null, e.sort ?? 0, e.created_at, e.updated_at);
+        n++;
+      }
+      for (const r of file.revisions ?? []) this.db.prepare('INSERT INTO revisions (id,entity_id,approved_at,data) VALUES (?,?,?,?)').run(randomUUID(), m(r.entity_id), r.approved_at, J(r.data));
+      for (const l of file.links ?? []) this.db.prepare('INSERT INTO links (id,project_id,from_id,to_id,type,confirmed,source,note,created_at) VALUES (?,?,?,?,?,?,?,?,?)').run(randomUUID(), m(l.project_id), m(l.from_id), m(l.to_id), l.type, l.confirmed ? 1 : 0, l.source, l.note ?? '', l.created_at);
+      for (const h of file.history ?? []) this.db.prepare('INSERT INTO history (id,project_id,entity_id,kind,action,summary,actor,at,before,after) VALUES (?,?,?,?,?,?,?,?,?,?)').run(randomUUID(), m(h.project_id), m(h.entity_id), h.kind, h.action, h.summary, h.actor, h.at, h.before ? J(h.before) : null, h.after ? J(h.after) : null);
+      this.db.exec('COMMIT');
+      const projects = file.entities.filter((e: any) => e.kind === 'project').map((e: any) => m(e.id));
+      for (const p of projects) this.log(p, null, 'project', 'imported', 'Project imported from an export file', 'You');
+      return { imported: n, projects };
+    } catch (err) { this.db.exec('ROLLBACK'); throw err; }
+  }
+}

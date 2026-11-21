@@ -1,0 +1,37 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #f7f7f9; --panel: #ffffff; --sunken: #f0f0f4; --line: #e4e4ea; --fg: #1c1c24; --muted: #6b6b7b;
+  --accent: #5b4cf0; --accent-fg: #ffffff; --accent-soft: #ecebff;
+  --ok: #17803d; --ok-soft: #e3f5e9; --warn: #a15c07; --warn-soft: #fdf0d9; --bad: #b42318; --bad-soft: #fde7e5;
+  --ai: #7a3fc4; --ai-soft: #f2e9fb;
+}
+:root[data-theme="dark"] {
+  --bg: #121216; --panel: #1a1a21; --sunken: #15151a; --line: #2b2b35; --fg: #ececf2; --muted: #9a9aab;
+  --accent: #8478ff; --accent-fg: #0f0f14; --accent-soft: #26244a;
+  --ok: #54d17f; --ok-soft: #14301f; --warn: #f0b34a; --warn-soft: #382a0e; --bad: #ff7b6f; --bad-soft: #3b1714;
+  --ai: #c79bff; --ai-soft: #2a1d3d;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121216; --panel: #1a1a21; --sunken: #15151a; --line: #2b2b35; --fg: #ececf2; --muted: #9a9aab;
+    --accent: #8478ff; --accent-fg: #0f0f14; --accent-soft: #26244a;
+    --ok: #54d17f; --ok-soft: #14301f; --warn: #f0b34a; --warn-soft: #382a0e; --bad: #ff7b6f; --bad-soft: #3b1714;
+    --ai: #c79bff; --ai-soft: #2a1d3d;
+  }
+}
+@theme inline {
+  --color-bg: var(--bg); --color-panel: var(--panel); --color-sunken: var(--sunken); --color-line: var(--line);
+  --color-fg: var(--fg); --color-muted: var(--muted); --color-accent: var(--accent); --color-accent-fg: var(--accent-fg);
+  --color-accent-soft: var(--accent-soft); --color-ok: var(--ok); --color-ok-soft: var(--ok-soft);
+  --color-warn: var(--warn); --color-warn-soft: var(--warn-soft); --color-bad: var(--bad); --color-bad-soft: var(--bad-soft);
+  --color-ai: var(--ai); --color-ai-soft: var(--ai-soft);
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+html, body, #root { height: 100%; }
+body { background: var(--bg); color: var(--fg); font-family: var(--font-sans); font-size: 14.5px; line-height: 1.5; }
+input, textarea, select { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; width: 100%; color: var(--fg); }
+input:focus, textarea:focus, select:focus, button:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+textarea { resize: vertical; min-height: 84px; }
+/* Suggestions are visibly different from things you wrote or approved */
+.ai-suggestion { border: 1px dashed var(--ai) !important; background: var(--ai-soft) !important; }
