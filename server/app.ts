@@ -6,7 +6,8 @@ import { serveStatic } from '@hono/node-server/serve-static';
 import { getConnInfo } from '@hono/node-server/conninfo';
 import { readFileSync, existsSync } from 'node:fs';
 import { join, relative } from 'node:path';
-import { Auth, LoginLimiter, isPrivateIp, MIN_PASSWORD } from './auth.ts';
+import { Auth, ApiTokens, LoginLimiter, isPrivateIp, MIN_PASSWORD } from './auth.ts';
+import { bulkImport } from './bulk.ts';
 import { Store, HttpError } from './store.ts';
 import { buildBrief } from '../shared/brief.ts';
 import { KINDS } from '../shared/schema.ts';
@@ -29,22 +30,23 @@ const COOKIE = 'kaiju_session';
 export function createApp(o: AppOptions) {
   const { store, auth } = o;
   const limiter = o.limiter ?? new LoginLimiter();
-  const app = new Hono();
+  const tokens = new ApiTokens(store.db);
+  const app = new Hono<{ Variables: { principal: 'owner' | 'claude' } }>();
 
-  const socketIp = (c: Context): string => {
+  const socketIp = (c: Context<any>): string => {
     try { return (getConnInfo(c).remote.address ?? 'unknown').replace(/^::ffff:/, ''); } catch { return 'unknown'; }
   };
   // Forwarded headers (who really connected, was it HTTPS) are only believed from a proxy you named.
   // Otherwise anyone could type them in and dodge the login limits.
-  const trusts = (c: Context) => !!o.trustProxy || (o.trustedProxies ?? []).includes(socketIp(c));
-  const clientIp = (c: Context): string => {
+  const trusts = (c: Context<any>) => !!o.trustProxy || (o.trustedProxies ?? []).includes(socketIp(c));
+  const clientIp = (c: Context<any>): string => {
     if (trusts(c)) {
       const xff = c.req.header('x-forwarded-for');
       if (xff) return xff.split(',').pop()!.trim(); // last entry = added by our proxy; earlier ones can be forged by the client
     }
     return socketIp(c);
   };
-  const isHttps = (c: Context) => (trusts(c) ? c.req.header('x-forwarded-proto')?.split(',')[0].trim() === 'https' : new URL(c.req.url).protocol === 'https:');
+  const isHttps = (c: Context<any>) => (trusts(c) ? c.req.header('x-forwarded-proto')?.split(',')[0].trim() === 'https' : new URL(c.req.url).protocol === 'https:');
 
   app.use('*', async (c, next) => {
     await next();
@@ -106,7 +108,24 @@ export function createApp(o: AppOptions) {
 
   // Everything below needs a login
   app.use('/api/*', async (c, next) => {
+    const authz = c.req.header('authorization');
+    if (authz?.startsWith('Bearer ')) {
+      // Access token for Claude Code: can read, add drafts and suggest. Cannot approve, complete, delete or change settings.
+      const ip = clientIp(c);
+      if (!isHttps(c) && !isPrivateIp(ip)) return c.json({ error: 'Tokens are only accepted over HTTPS when you are not on your home network.' }, 403);
+      const wait = limiter.retryAfter(ip);
+      if (wait) return c.json({ error: 'Too many bad attempts. Try again later.' }, 429);
+      if (!tokens.verify(authz.slice(7).trim())) { limiter.fail(ip); return c.json({ error: 'Invalid or revoked token.' }, 401); }
+      const m = c.req.method; const path = c.req.path;
+      const allowed = (m === 'GET' && !/^\/api\/(auth|ai|tokens)(\/|$)/.test(path))
+        || (m === 'POST' && (path === '/api/entities' || path === '/api/links' || path === '/api/bulk'))
+        || (m === 'PATCH' && /^\/api\/entities\/[^/]+$/.test(path));
+      if (!allowed) return c.json({ error: 'This token cannot do that. Approving, completing, deleting and settings can only be done by you in the app.' }, 403);
+      c.set('principal', 'claude');
+      return next();
+    }
     if (!auth.validSession(getCookie(c, COOKIE))) return c.json({ error: 'Please log in.' }, 401);
+    c.set('principal', 'owner');
     await next();
   });
 
@@ -125,6 +144,14 @@ export function createApp(o: AppOptions) {
   app.get('/api/entities', (c) => c.json(store.list({ project_id: c.req.query('project'), kind: c.req.query('kind'), q: c.req.query('q') })));
   app.post('/api/entities', async (c) => {
     const b = await c.req.json();
+    if (c.get('principal') === 'claude') {
+      if (b.kind === 'brief') throw new HttpError(403, 'Briefs are made and approved by you in the app.');
+      const data: Record<string, unknown> = { ...(b.data ?? {}) };
+      delete data.original_input;
+      if (b.kind === 'feature') { data.origin = 'Imported by Claude Code'; data.original_input = ''; }
+      const prov = Object.fromEntries(Object.entries(data).filter(([k, v]) => typeof v === 'string' && v !== '' && k !== 'origin').map(([k]) => [k, 'ai' as const]));
+      return c.json(store.create({ kind: b.kind, project_id: b.project_id, data, status: b.kind === 'feature' ? 'Proposed' : undefined, flags: b.flags, prov, actor: 'Claude Code' }), 201);
+    }
     return c.json(store.create({ kind: b.kind, project_id: b.project_id, data: b.data, status: b.status, flags: b.flags }), 201);
   });
   app.get('/api/entities/:id', (c) => {
@@ -133,6 +160,13 @@ export function createApp(o: AppOptions) {
   });
   app.patch('/api/entities/:id', async (c) => {
     const b = await c.req.json();
+    if (c.get('principal') === 'claude') {
+      const data: Record<string, unknown> = { ...(b.data ?? {}) };
+      delete data.original_input; delete data.origin;
+      store.assertAiMayEdit(c.req.param('id'), Object.keys(data));
+      const prov = Object.fromEntries(Object.keys(data).map((k) => [k, 'ai' as const]));
+      return c.json(store.update(c.req.param('id'), { data, flags: b.flags, prov, actor: 'Claude Code' }));
+    }
     return c.json(store.update(c.req.param('id'), { data: b.data, flags: b.flags }));
   });
   app.post('/api/entities/:id/status', async (c) => {
@@ -149,7 +183,29 @@ export function createApp(o: AppOptions) {
   app.get('/api/projects/:id/history', (c) => c.json(store.history(c.req.param('id'))));
   app.get('/api/history', (c) => c.json(store.history(null, 50)));
 
-  app.post('/api/links', async (c) => c.json(store.addLink(await c.req.json()), 201));
+  app.post('/api/links', async (c) => {
+    const b = await c.req.json();
+    if (c.get('principal') === 'claude') return c.json(store.addLink({ project_id: b.project_id, from_id: b.from_id, to_id: b.to_id, type: b.type === 'phase_feature' ? 'related' : b.type, note: typeof b.note === 'string' ? b.note : '', source: 'ai', confirmed: false, actor: 'Claude Code' }), 201);
+    return c.json(store.addLink(b), 201);
+  });
+  app.post('/api/bulk', bodyLimit({ maxSize: 5 * 1024 * 1024 }), async (c) => {
+    const b = await c.req.json().catch(() => null);
+    return c.json(bulkImport(store, b, { dry_run: b?.dry_run === true }));
+  });
+  app.get('/api/projects/:id/snapshot', (c) => {
+    const id = c.req.param('id');
+    const all = store.list({ project_id: id });
+    const pick = (k: string) => all.filter((e) => e.kind === k);
+    return c.json({ project: store.get(id), parts: pick('part'), features: pick('feature'), tasks: pick('task'), phases: pick('phase'), decisions: pick('decision'), docs: pick('doc'), debt: pick('debt'), links: store.links(id), summary: store.summary(id) });
+  });
+
+  // Access tokens (owner only)
+  app.get('/api/tokens', (c) => c.json(tokens.list()));
+  app.post('/api/tokens', async (c) => {
+    const b = await c.req.json().catch(() => ({}));
+    try { return c.json(tokens.create(String(b.name ?? '')), 201); } catch (e) { throw new HttpError(400, (e as Error).message); }
+  });
+  app.delete('/api/tokens/:id', (c) => { tokens.revoke(c.req.param('id')); return c.json({ ok: true }); });
   app.post('/api/links/:id/confirm', (c) => { store.confirmLink(c.req.param('id')); return c.json({ ok: true }); });
   app.delete('/api/links/:id', (c) => { store.removeLink(c.req.param('id')); return c.json({ ok: true }); });
 

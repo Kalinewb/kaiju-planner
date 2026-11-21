@@ -30,6 +30,33 @@ Turn it on in **Settings** with your own Anthropic API key (console.anthropic.co
 - **What is sent to Anthropic:** your messages and a summary of the current project (definition, parts, feature names and descriptions). Project text is passed as data, with instructions telling Claude to ignore any commands inside it.
 - **The key** lives in the app's database on your server, is never sent back to the browser, and is not part of exports. It *is* in the database file, so it is also in Proxmox backups of the container. Use a key with a spending limit and remove it in Settings if you stop using the assistant.
 
+## Claude Code integration (import and manage from your computer)
+
+Claude Code can read your planner and add **drafts** to it, so you can bring in projects you already have. It connects through a small MCP server in this repo (`mcp/server.ts`, no dependencies, Node 24+) using an access token.
+
+1. In the app: **Settings → Claude Code access → Create token**. Copy the command it shows (once only).
+2. On your computer, clone this repo, then run that command, with the path filled in:
+
+```bash
+claude mcp add kaiju-planner \
+  --env KAIJU_URL=https://planner.example.com \
+  --env KAIJU_TOKEN=kpt_... \
+  -- node /path/to/kaiju-planner/mcp/server.ts
+```
+
+3. In Claude Code, for example: *"Read the notes and code in this folder and import this project into my planner. Do a dry run first."*
+
+**Tools Claude gets:** `kaiju_get_schema`, `kaiju_list_projects`, `kaiju_get_project`, `kaiju_bulk_import` (with `dry_run`), `kaiju_add_item`, `kaiju_update_item`, `kaiju_suggest_link`, `kaiju_get_brief`. The brief tool also lets Claude Code fetch the approved instructions for a feature and work from them.
+
+**What a token can and cannot do** (enforced by the server, not by trust):
+
+- It can read everything and add drafts. Everything it adds is **unapproved**, status "Proposed" for features, labelled *AI suggestion* with the author shown as Claude Code in the change history, and it never fills your "original words".
+- It **cannot** approve, complete, change a status, delete, confirm a relationship, create briefs, import export files, or touch settings, passwords, the AI key or tokens. Those are only possible when you are logged in.
+- It **cannot overwrite** text you wrote or touch anything you approved. It can fill empty fields and extend its own drafts. Records with the same name are **skipped, not changed**.
+- Real-world status ("half built") goes in as an unverified note, never as the status itself. Tasks, and roadmap entries, can only attach to features you have approved, so those are reported as *skipped* and can be imported after you approve.
+- A dry run changes nothing. A real import is all-or-nothing, with at most 500 items per call.
+- Tokens are stored as hashes, shown once, and can be revoked at any time. Over the internet they are accepted only over HTTPS. Bad tokens are rate-limited like bad passwords.
+
 ## Install on Proxmox
 
 Run this on your **Proxmox host** shell. It creates a small Debian container, installs Node, builds the app and starts it as a service.

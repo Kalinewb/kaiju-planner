@@ -136,6 +136,14 @@ export class Store {
     return this.get(id);
   }
 
+  /** Claude Code may only fill empty fields or fields Claude wrote itself, and never touch approved records. */
+  assertAiMayEdit(id: string, keys: string[]) {
+    const e = this.get(id);
+    if (e.approved) throw new HttpError(409, `"${e.title}" has been approved by you, so Claude cannot change it. Make the change in the app.`);
+    const blocked = keys.filter((k) => (e.data[k] ?? '').trim() && e.prov[k] !== 'ai');
+    if (blocked.length) throw new HttpError(409, `These fields contain text you wrote, so Claude cannot overwrite them: ${blocked.map((k) => KINDS[e.kind].fields.find((f) => f.key === k)?.label ?? k).join(', ')}.`, { protectedFields: blocked });
+  }
+
   private checkStatusAllowed(kind: string, status: string, hasApproval: boolean) {
     const def = KINDS[kind];
     if (!def.statuses) return;
@@ -226,7 +234,7 @@ export class Store {
   links(project_id: string): Link[] {
     return this.db.prepare('SELECT * FROM links WHERE project_id = ? ORDER BY created_at').all(project_id).map(toLink);
   }
-  addLink(input: { project_id: string; from_id: string; to_id: string; type: string; confirmed?: boolean; source?: 'user' | 'ai'; note?: string }): Link {
+  addLink(input: { project_id: string; from_id: string; to_id: string; type: string; confirmed?: boolean; source?: 'user' | 'ai'; note?: string; actor?: string }): Link {
     const a = this.get(input.from_id); const b = this.get(input.to_id);
     if (a.project_id !== input.project_id || (input.type !== 'phase_feature' && b.project_id !== input.project_id) || (input.type === 'phase_feature' && b.project_id !== input.project_id))
       throw new HttpError(400, 'Both records must be in this project');
@@ -240,7 +248,7 @@ export class Store {
     const id = randomUUID();
     this.db.prepare('INSERT INTO links (id,project_id,from_id,to_id,type,confirmed,source,note,created_at) VALUES (?,?,?,?,?,?,?,?,?)')
       .run(id, input.project_id, input.from_id, input.to_id, input.type, confirmed ? 1 : 0, source, input.note ?? '', now());
-    this.log(input.project_id, id, 'link', 'link', `${confirmed ? 'Linked' : 'Possible link'}: "${a.title}" ↔ "${b.title}" (${input.type})`);
+    this.log(input.project_id, id, 'link', 'link', `${confirmed ? 'Linked' : 'Possible link'}: "${a.title}" ↔ "${b.title}" (${input.type})`, input.actor ?? (source === 'ai' ? 'Claude (suggestion)' : 'You'));
     return toLink(this.db.prepare('SELECT * FROM links WHERE id=?').get(id) as Row);
   }
   confirmLink(id: string) {

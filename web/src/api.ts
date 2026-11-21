@@ -34,7 +34,12 @@ export interface AiStatus { hasKey: boolean; keyHint: string; enabled: boolean; 
 export interface Proposal { kind: 'feature'; data: Record<string, string>; part_id: string; user_said: string; unclear_fields: string[]; open_questions: string[]; my_suggestions: string[] }
 export interface LinkSuggestion { from_id: string; to_id: string; type: string; reason: string }
 
+export interface TokenInfo { id: string; name: string; created_at: string; last_used: string | null }
+
 export const api = {
+  tokens: () => req<TokenInfo[]>('GET', '/tokens'),
+  createToken: (name: string) => req<{ id: string; token: string }>('POST', '/tokens', { name }),
+  revokeToken: (id: string) => req('DELETE', `/tokens/${id}`),
   aiStatus: () => req<AiStatus>('GET', '/ai/status'),
   aiSettings: (b: { apiKey?: string; enabled?: boolean; model?: string }) => req<AiStatus>('POST', '/ai/settings', b),
   aiHistory: (pid: string) => req<{ id: string; role: 'user' | 'assistant'; content: string; at: string }[]>('GET', `/ai/chat/${pid}`),

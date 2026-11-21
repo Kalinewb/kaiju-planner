@@ -136,6 +136,33 @@ export function GlobalRoadmaps() {
   );
 }
 
+function TokenSettings() {
+  const t = useAsync(() => api.tokens(), []);
+  const [name, setName] = useState('Claude Code'); const [fresh, setFresh] = useState<string | null>(null); const [err, setErr] = useState(''); const [copied, setCopied] = useState(false);
+  const cmd = fresh ? `claude mcp add kaiju-planner --env KAIJU_URL=${location.origin} --env KAIJU_TOKEN=${fresh} -- node /path/to/kaiju-planner/mcp/server.ts` : '';
+  return (
+    <Card className="lg:col-span-2"><h2 className="mb-1 font-semibold">Claude Code access (import and manage from your computer)</h2>
+      <p className="mb-3 text-sm text-muted">Lets Claude Code on your computer read your projects and <strong>add drafts</strong>, for example to import projects you already have. It can never approve, complete, delete or change settings. Everything it adds is unapproved and labelled as written by Claude. It never overwrites text you wrote. The repository's <code>mcp/server.ts</code> connects Claude Code to this planner using a token.</p>
+      <form className="mb-3 flex flex-wrap gap-2" onSubmit={async (e) => { e.preventDefault(); setErr(''); try { const r = await api.createToken(name); setFresh(r.token); setCopied(false); t.reload(); } catch (x) { setErr((x as Error).message); } }}>
+        <input aria-label="Token name" className="max-w-xs" value={name} onChange={(e) => setName(e.target.value)} placeholder="Name, e.g. Laptop" />
+        <Button variant="primary" disabled={!name.trim()}>Create token</Button>
+      </form>
+      {err && <div role="alert" className="mb-2 text-bad">{err}</div>}
+      {fresh && (
+        <div className="mb-3 rounded-lg bg-warn-soft p-3 text-sm">
+          <p className="mb-2 text-warn"><strong>Copy this now. It is shown only once</strong> and cannot be read back later. Replace <code>/path/to/kaiju-planner</code> with where you cloned the repository.</p>
+          <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded bg-panel p-2 text-xs">{cmd}</pre>
+          <div className="mt-2 flex gap-2"><Button onClick={async () => { try { await navigator.clipboard.writeText(cmd); setCopied(true); } catch { setCopied(false); } }}>{copied ? 'Copied' : 'Copy command'}</Button><Button variant="ghost" onClick={() => setFresh(null)}>I have saved it</Button></div>
+        </div>)}
+      {t.data && t.data.length > 0 && (
+        <ul className="divide-y divide-line text-sm">{t.data.map((x) => (
+          <li key={x.id} className="flex flex-wrap items-center justify-between gap-2 py-2"><span><strong>{x.name}</strong> <span className="text-muted">created {fmtDate(x.created_at)} · {x.last_used ? `last used ${fmtDate(x.last_used)}` : 'never used'}</span></span>
+            <Button variant="danger" onClick={async () => { await api.revokeToken(x.id); t.reload(); }}>Revoke</Button></li>))}</ul>)}
+      {t.data?.length === 0 && !fresh && <p className="text-sm text-muted">No tokens yet.</p>}
+    </Card>
+  );
+}
+
 function AiSettings() {
   const st = useAsync(() => api.aiStatus(), []);
   const [key, setKey] = useState(''); const [msg, setMsg] = useState(''); const [err, setErr] = useState('');
@@ -199,6 +226,7 @@ export function SettingsPage() {
           </form>
         </Card>
         <AiSettings />
+        <TokenSettings />
       </div>
     </>
   );
