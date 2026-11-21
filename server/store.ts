@@ -289,6 +289,49 @@ export class Store {
     ids.forEach((id, i) => st.run(i + 1, id));
   }
 
+  // ---------- what needs the owner ----------
+  attention(project_id: string) {
+    const all = [this.get(project_id), ...this.list({ project_id })];
+    const item = (e: Entity, why: string, extra: Record<string, unknown> = {}) => ({ id: e.id, kind: e.kind, title: e.title, status: e.status, why, part_id: e.data.part_id || (e.kind === 'part' ? e.id : ''), ...extra });
+    const decide: ReturnType<typeof item>[] = [];
+    const drafts: ReturnType<typeof item>[] = [];
+    for (const e of all) {
+      const def = KINDS[e.kind];
+      if (e.kind === 'brief') continue;
+      const flagged = Object.entries(e.flags);
+      if (e.kind === 'decision' && (e.status === 'Proposed' || (e.status === 'Not decided' && !(e.data.chosen ?? '').trim()))) decide.push(item(e, e.status === 'Proposed' ? 'A decision is proposed and waiting for your answer' : 'A decision has not been made'));
+      else if (e.kind === 'feature' && (e.status === 'Needs clarification' || e.status === 'Under review')) decide.push(item(e, e.status === 'Under review' ? 'Under review by you' : 'Needs clarification'));
+      else if (flagged.length) decide.push(item(e, flagged.map(([k, v]) => `${def.fields.find((f) => f.key === k)?.label ?? k}: ${v === 'clarify' ? 'needs clarification' : 'not decided'}`).join('; ')));
+      if (!def.approvable) continue;
+      if (e.kind === 'feature' && e.status === 'Rejected') continue;
+      const dirty = !!e.approved && Object.keys({ ...e.data, ...e.approved }).some((k) => (e.data[k] ?? '') !== (e.approved![k] ?? ''));
+      if (!e.approved || dirty) drafts.push(item(e, e.approved ? 'Edited since you approved it' : 'Not approved yet', { has_text: !!e.title.trim() }));
+    }
+    const dec = new Set(decide.map((d) => d.id));
+    const shown = drafts.filter((d) => !(d.kind === 'decision' && dec.has(d.id)));
+    return { decide, drafts: shown, count: decide.length + shown.length };
+  }
+
+  /** Approve several things at once. Only on the owner's explicit say-so. Decisions without a chosen solution are never approved this way. */
+  approveMany(project_id: string, ids: string[]) {
+    const approved: string[] = []; const skipped: { id: string; title: string; reason: string }[] = [];
+    this.db.exec('BEGIN');
+    try {
+      for (const id of ids) {
+        let e: Entity;
+        try { e = this.get(id); } catch { skipped.push({ id, title: '?', reason: 'not found' }); continue; }
+        const pid = e.kind === 'project' ? e.id : e.project_id;
+        if (pid !== project_id) { skipped.push({ id, title: e.title, reason: 'not in this project' }); continue; }
+        if (!KINDS[e.kind].approvable || e.kind === 'brief') { skipped.push({ id, title: e.title, reason: 'cannot be approved' }); continue; }
+        if (!e.title.trim()) { skipped.push({ id, title: e.title, reason: 'has no name' }); continue; }
+        if (e.kind === 'decision' && !(e.data.chosen ?? '').trim()) { skipped.push({ id, title: e.title, reason: 'no chosen solution yet. Approve it by hand once you have decided' }); continue; }
+        this.approve(id); approved.push(id);
+      }
+      this.db.exec('COMMIT');
+    } catch (err) { this.db.exec('ROLLBACK'); throw err; }
+    return { approved: approved.length, ids: approved, skipped };
+  }
+
   // ---------- summaries ----------
   summary(project_id: string) {
     const all = this.list({ project_id });

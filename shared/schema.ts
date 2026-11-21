@@ -13,6 +13,7 @@ export interface Field {
   futureOnly?: boolean; // only shown for features created through "Future feature planning"
   hidden?: boolean; // stored, but not shown as an editable form field
   suggestions?: string[]; // free text, but offer these as quick picks
+  advanced?: boolean;     // tucked into "More fields" in forms
 }
 
 export interface KindDef {
@@ -28,6 +29,7 @@ export interface KindDef {
 }
 
 export const PART_TYPES = ['Plugin', 'Subplugin', 'Addon', 'Integration', 'Module', 'Component'];
+export const INSTALL_STATES = ['Not set', 'Not installed', 'Installed', 'Installed and pinned', 'Local copy only'];
 export const PRIORITIES = ['Not set', 'Low', 'Medium', 'High', 'Critical'];
 export const COMPLEXITY = ['Not estimated', 'Small', 'Medium', 'Large', 'Very large'];
 
@@ -81,6 +83,11 @@ export const KINDS: Record<string, KindDef> = {
       t('name', 'Name'),
       { key: 'type', label: 'What kind of thing is it?', type: 'text', suggestions: PART_TYPES, help: 'For example Plugin, Subplugin, Addon, Integration. Type your own if none fit.' },
       r('parent_id', 'Lives inside', 'part', 'Leave empty for something at the top level of the project.'),
+      t('version', 'Version', 'For example 1.2.0. Leave empty if it has none.'),
+      s('install_state', 'Install state', INSTALL_STATES),
+      t('repo', 'Repository link', 'Where the code lives, for example a GitHub address.'),
+      t('commit', 'Branch or commit', 'The branch or commit this info refers to.'),
+      { key: 'facts_verified_on', label: 'Version and install info last checked', type: 'date', help: 'When you (or someone you trust) last confirmed the version, install state and link. Used to show how stale they are.' },
       l('description', 'Description'),
       l('purpose', 'Purpose', 'Why does this part exist?'),
       l('responsibilities', 'What it is responsible for'),
@@ -186,6 +193,15 @@ export const KINDS: Record<string, KindDef> = {
     fields: [t('name', 'Title'), l('text', 'Brief (Markdown)'), t('source_id', 'Source record')],
   },
 };
+
+const ADVANCED: Record<string, string[]> = {
+  project: ['vision', 'scope', 'core_functionality', 'out_of_scope', 'constraints', 'success'],
+  part: ['commit', 'facts_verified_on', 'purpose', 'responsibilities', 'notes'],
+  feature: ['original_input', 'problem', 'users', 'behavior', 'expected_result', 'complexity', 'must_not_change', 'testing_plan', 'docs_notes', 'technical_notes'],
+  task: ['acceptance', 'technical_notes'],
+  decision: ['pros_cons', 'consequences', 'decided_on'],
+};
+for (const [kind, keys] of Object.entries(ADVANCED)) for (const f of KINDS[kind].fields) if (keys.includes(f.key)) f.advanced = true;
 
 export const LINK_TYPES: Record<string, string> = {
   depends_on: 'needs',

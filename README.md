@@ -29,6 +29,15 @@ A project is a **tree of components**. Each component has a type you choose (Plu
 - **Safe moves:** a component cannot be placed inside itself or its own contents. Deleting one asks first and moves what was inside it to the top level. Nothing is deleted with it.
 - **Claude Code import:** `parts` accept `type` and `parent` (by name, in any order), and phases, decisions and docs accept `part`.
 
+## Keeping it clear
+
+- **Needs you** (sidebar, with a count): everything waiting for your call. Open decisions and questions at the top. Below, every unapproved draft, grouped by type, with tick boxes and **Approve selected**. Nothing is ticked by default, decisions without a chosen solution are never bulk-approved, and Claude's tokens cannot use it.
+- **Structure has three views:** *Tree* (status dots, version, install state, "N drafts", and a warning when the version info is stale; drag a row onto another to move it), *Table* (the plugin overview: version, install state, repo link, how old that info is, counts, progress; filter by type or stale), and *Map* (boxes and lines, with dashed arcs for possible relationships between components).
+- **Plugin facts are real fields:** version, install state, repository link, branch or commit, and a "last checked" date.
+- **Search everything** with Ctrl+K (or the Search button) across every project and record type.
+- **Calmer forms:** the essential fields first, the rest folded under "More fields". Only exceptions get a label (AI suggestion, approved, unclear). Mark something as unclear with one small link.
+- **Fewer sidebar items:** Overview, My Projects, Settings. Inside a project: Dashboard, Needs you, Structure (with the tree), Project Definition, then *Whole project* and *More* folded away.
+
 ## The Claude assistant (optional)
 
 Turn it on in **Settings** with your own Anthropic API key (console.anthropic.com, billed by use, separate from a Claude subscription).

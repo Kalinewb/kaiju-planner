@@ -134,9 +134,7 @@ export function ProjectDashboard() {
       {project.approved && hasUnapprovedChanges(project) && <div className="mb-4 rounded-lg bg-warn-soft px-3 py-2 text-warn">The project definition has edits you have not approved. <Link className="underline" to={`/p/${project.id}/definition`}>Review them</Link></div>}
       <Card className="mb-4"><div className="mb-1 flex justify-between"><span className="font-medium">Overall progress</span><span>{s.progress}%</span></div><Progress value={s.progress} />
         <div className="mt-1 text-xs text-muted">{s.tasksTotal ? `Based on ${s.tasksTotal} task(s)` : 'No tasks yet, so this is based on completed features.'}</div></Card>
-      <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-6">
-        {[['Components', s.parts], ['Features', s.features], ['Completed', s.featuresCompleted], ['In development', s.featuresInDevelopment], ['Planned / approved', s.featuresPlanned], ['Ideas', s.featuresIdeas]].map(([l, v]) => <Card key={l as string}><Stat label={l as string} value={v as number} /></Card>)}
-      </div>
+      <p className="mb-4 text-sm text-muted">{s.parts} component{s.parts === 1 ? '' : 's'} · {s.features} feature{s.features === 1 ? '' : 's'} ({s.featuresCompleted} completed, {s.featuresInDevelopment} in development, {s.featuresPlanned} approved or planned, {s.featuresIdeas} still ideas) · {s.tasksOpen} open task{s.tasksOpen === 1 ? '' : 's'}</p>
       {parts.data && parts.data.length > 0 && (
         <Card className="mb-4">
           <div className="mb-2 flex items-center justify-between"><h2 className="font-semibold">Structure</h2><Link className="text-sm text-accent" to={`/p/${project.id}/structure`}>Open full structure</Link></div>

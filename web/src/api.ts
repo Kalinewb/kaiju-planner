@@ -36,7 +36,12 @@ export interface LinkSuggestion { from_id: string; to_id: string; type: string; 
 
 export interface TokenInfo { id: string; name: string; created_at: string; last_used: string | null }
 
+export interface AttentionItem { id: string; kind: string; title: string; status: string; why: string; part_id: string }
+export interface Attention { decide: AttentionItem[]; drafts: AttentionItem[]; count: number }
+
 export const api = {
+  attention: (pid: string) => req<Attention>('GET', `/projects/${pid}/attention`),
+  approveMany: (pid: string, ids: string[]) => req<{ approved: number; ids: string[]; skipped: { id: string; title: string; reason: string }[] }>('POST', `/projects/${pid}/approve-many`, { ids }),
   tokens: () => req<TokenInfo[]>('GET', '/tokens'),
   createToken: (name: string) => req<{ id: string; token: string }>('POST', '/tokens', { name }),
   revokeToken: (id: string) => req('DELETE', `/tokens/${id}`),

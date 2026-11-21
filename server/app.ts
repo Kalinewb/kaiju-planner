@@ -192,6 +192,13 @@ export function createApp(o: AppOptions) {
     const b = await c.req.json().catch(() => null);
     return c.json(bulkImport(store, b, { dry_run: b?.dry_run === true }));
   });
+  app.get('/api/projects/:id/attention', (c) => c.json(store.attention(c.req.param('id'))));
+  app.post('/api/projects/:id/approve-many', async (c) => {
+    const b = await c.req.json().catch(() => ({}));
+    if (!Array.isArray(b.ids) || b.ids.some((x: unknown) => typeof x !== 'string')) throw new HttpError(400, 'Send a list of ids.');
+    if (b.ids.length > 500) throw new HttpError(400, 'Approve at most 500 at a time.');
+    return c.json(store.approveMany(c.req.param('id'), b.ids));
+  });
   app.get('/api/projects/:id/snapshot', (c) => {
     const id = c.req.param('id');
     const all = store.list({ project_id: id });

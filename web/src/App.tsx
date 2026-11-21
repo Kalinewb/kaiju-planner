@@ -7,6 +7,8 @@ import { Overview, Projects, NewProject, ProjectDashboard, Definition } from './
 import { FeaturesPage, FeatureDetail, FeatureWizard } from './features.tsx';
 import { Kanban, Roadmap, Dependencies } from './planning.tsx';
 import { Assistant } from './assistant.tsx';
+import { NeedsYou } from './needs.tsx';
+import { CommandPalette } from './palette.tsx';
 import { Structure, NodeLayout, NodeOverview, SidebarTree } from './structure.tsx';
 import { ScopeContext } from './scope.tsx';
 import { Collection, HistoryPage, SettingsPage, GlobalIdeas, GlobalTasks, GlobalDocs, GlobalRoadmaps } from './pages-misc.tsx';
@@ -50,6 +52,9 @@ function Shell() {
   const m = /^\/p\/([^/]+)/.exec(loc.pathname);
   const pid = m?.[1];
   const project = useAsync(() => (pid ? api.get(pid) : Promise.resolve(null)), [pid]);
+  const attn = useAsync(() => (pid ? api.attention(pid) : Promise.resolve(null)), [pid, loc.pathname]);
+  const [searchOpen, setSearchOpen] = useState(false);
+  useEffect(() => { const h = (e: KeyboardEvent) => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); setSearchOpen((o) => !o); } }; window.addEventListener('keydown', h); return () => window.removeEventListener('keydown', h); }, []);
   return (
     <div className="flex min-h-full">
       <aside className={cx('fixed inset-y-0 left-0 z-40 w-64 shrink-0 overflow-y-auto border-r border-line bg-panel p-3 md:static md:block', open ? 'block' : 'hidden')}>
@@ -57,22 +62,25 @@ function Shell() {
         <nav className="space-y-0.5" aria-label="Main">
           <NavLink to="/" end className={linkCls}>Overview</NavLink>
           <NavLink to="/projects" className={linkCls}>My Projects</NavLink>
-          <NavLink to="/ideas" className={linkCls}>Ideas & Future Features</NavLink>
-          <NavLink to="/roadmaps" className={linkCls}>Development Roadmaps</NavLink>
-          <NavLink to="/tasks" className={linkCls}>Tasks</NavLink>
-          <NavLink to="/docs" className={linkCls}>Documentation</NavLink>
           <NavLink to="/settings" className={linkCls}>Settings</NavLink>
         </nav>
         {pid && project.data && (
           <nav className="mt-5 space-y-0.5 border-t border-line pt-4" aria-label="Project">
             <div className="mb-1 truncate px-3 text-xs font-semibold uppercase tracking-wide text-muted">{project.data.entity.title}</div>
             <NavLink to={`/p/${pid}`} end className={linkCls}>Dashboard</NavLink>
-            <NavLink to={`/p/${pid}/definition`} className={linkCls}>Project Definition</NavLink>
+            <NavLink to={`/p/${pid}/needs`} className={linkCls}><span className="flex items-center justify-between">Needs you{(attn.data?.count ?? 0) > 0 && <span className="rounded-full bg-warn-soft px-2 text-xs text-warn">{attn.data!.count}</span>}</span></NavLink>
             <NavLink to={`/p/${pid}/structure`} className={linkCls}>Structure</NavLink>
             <div className="pb-1 pl-1"><SidebarTree pid={pid} /></div>
-            <details className="border-t border-line pt-2" open={/^\/p\/[^/]+\/(features|roadmap|tasks|dependencies|docs|decisions|debt|history|assistant)/.test(loc.pathname)}>
+            <NavLink to={`/p/${pid}/definition`} className={linkCls}>Project Definition</NavLink>
+            <details className="border-t border-line pt-2" open={/^\/p\/[^/]+\/(features|roadmap|tasks|decisions|docs)/.test(loc.pathname)}>
               <summary className="cursor-pointer select-none px-3 py-1 text-xs font-semibold uppercase tracking-wide text-muted">Whole project</summary>
-              {[['features', 'Features'], ['roadmap', 'Roadmap'], ['tasks', 'Tasks'], ['dependencies', 'Dependencies'], ['docs', 'Documentation'], ['decisions', 'Decisions'], ['debt', 'Technical Debt'], ['history', 'Change History'], ['assistant', 'Planning Assistant']].map(([to, label]) => (
+              {[['features', 'Features'], ['roadmap', 'Roadmap'], ['tasks', 'Tasks'], ['decisions', 'Decisions'], ['docs', 'Documentation']].map(([to, label]) => (
+                <NavLink key={to} to={`/p/${pid}/${to}`} className={linkCls}>{label}</NavLink>
+              ))}
+            </details>
+            <details className="pt-1" open={/^\/p\/[^/]+\/(dependencies|debt|history|assistant)/.test(loc.pathname)}>
+              <summary className="cursor-pointer select-none px-3 py-1 text-xs font-semibold uppercase tracking-wide text-muted">More</summary>
+              {[['dependencies', 'Dependencies'], ['debt', 'Technical Debt'], ['history', 'Change History'], ['assistant', 'Planning Assistant']].map(([to, label]) => (
                 <NavLink key={to} to={`/p/${pid}/${to}`} className={linkCls}>{label}</NavLink>
               ))}
             </details>
@@ -80,10 +88,11 @@ function Shell() {
         )}
       </aside>
       {open && <div className="fixed inset-0 z-30 bg-black/40 md:hidden" onClick={() => setOpen(false)} />}
+      <CommandPalette open={searchOpen} onClose={() => setSearchOpen(false)} />
       <div className="min-w-0 flex-1">
         <header className="flex items-center justify-between border-b border-line bg-panel px-4 py-2">
           <Button variant="ghost" className="md:hidden" onClick={() => setOpen(true)} aria-label="Open menu">☰ Menu</Button>
-          <span className="hidden md:block" />
+          <Button variant="ghost" onClick={() => setSearchOpen(true)} aria-label="Search everything"><span aria-hidden>⌕</span> Search <kbd className="ml-1 rounded border border-line px-1 text-[10px] text-muted">Ctrl K</kbd></Button>
           <div className="flex items-center gap-1"><ThemeToggle />
             <Button variant="ghost" onClick={async () => { await api.logout(); location.href = '/'; }}>Log out</Button></div>
         </header>
@@ -123,6 +132,7 @@ export function App() {
           <Route index element={<ProjectDashboard />} />
           <Route path="definition" element={<Definition />} />
           <Route path="structure" element={<Structure />} />
+          <Route path="needs" element={<NeedsYou />} />
           <Route path="parts" element={<Navigate to="../structure" replace />} />
           <Route path="n/:nid" element={<NodeLayout />}>
             <Route index element={<NodeOverview />} />

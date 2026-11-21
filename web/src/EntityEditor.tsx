@@ -73,6 +73,57 @@ export function EntityEditor({ entity, kind, projectId, options = {}, initial, h
   const live = entity ? { ...entity, data, flags: flags as Entity['flags'] } : null;
   const unapproved = entity ? hasUnapprovedChanges({ data, approved: entity.approved }) : false;
 
+  const essential = fields.filter((f) => !f.advanced || f.futureOnly);
+  const advanced = fields.filter((f) => f.advanced && !f.futureOnly);
+  const advancedHasContent = advanced.some((f) => (data[f.key] ?? '').trim() || flags[f.key]);
+
+  function renderField(f: (typeof fields)[number]) {
+    const cat = live ? fieldCategory(live, f.key) : flags[f.key] === 'clarify' ? 'clarify' : flags[f.key] === 'undecided' ? 'undecided' : 'user';
+    const empty = !(data[f.key] ?? '').trim();
+    const id = `f-${f.key}`;
+    const canFlag = f.type !== 'select' && f.type !== 'ref' && f.type !== 'date';
+    return (
+      <>
+        <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+          <label htmlFor={id} className="font-medium">{f.label}</label>
+          <span className="flex items-center gap-2">
+            {cat !== 'user' && !(empty && !flags[f.key]) && <CategoryBadge cat={cat} />}
+          </span>
+        </div>
+        {f.help && <p className="mb-1 text-xs text-muted">{f.help}</p>}
+        {f.type === 'long' ? (
+          <textarea id={id} value={data[f.key] ?? ''} onChange={(e) => set(f.key, e.target.value)} className={cx(cat === 'ai' && 'ai-suggestion')} />
+        ) : f.type === 'select' ? (
+          <select id={id} value={data[f.key] ?? f.options![0]} onChange={(e) => set(f.key, e.target.value)}>
+            {f.options!.map((o) => <option key={o}>{o}</option>)}
+          </select>
+        ) : f.type === 'ref' ? (
+          <select id={id} value={data[f.key] ?? ''} onChange={(e) => set(f.key, e.target.value)}>
+            <option value="">— none —</option>
+            {refOptions(f).map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+          </select>
+        ) : f.type === 'date' ? (
+          <input id={id} type="date" value={data[f.key] ?? ''} onChange={(e) => set(f.key, e.target.value)} />
+        ) : (
+          <>
+            <input id={id} list={f.suggestions ? `${id}-list` : undefined} value={data[f.key] ?? ''} onChange={(e) => set(f.key, e.target.value)} className={cx(cat === 'ai' && 'ai-suggestion')} />
+            {f.suggestions && <datalist id={`${id}-list`}>{f.suggestions.map((o) => <option key={o} value={o} />)}</datalist>}
+          </>
+        )}
+        {canFlag && (flags[f.key] ? (
+          <div className="mt-1 flex items-center gap-2 text-xs">
+            <select aria-label={`Mark ${f.label}`} className="!w-auto !py-0.5 text-xs" value={flags[f.key]} onChange={(e) => setFlag(f.key, e.target.value)}>
+              <option value="clarify">Needs clarification</option><option value="undecided">Not decided</option>
+            </select>
+            <button type="button" className="text-muted underline" onClick={() => setFlag(f.key, '')}>Clear mark</button>
+          </div>
+        ) : (
+          <button type="button" className="mt-1 text-xs text-muted hover:text-fg" onClick={() => setFlag(f.key, 'clarify')}>+ Mark as unclear</button>
+        ))}
+      </>
+    );
+  }
+
   return (
     <form onSubmit={(e) => { e.preventDefault(); save(); }} className="space-y-4">
       {entity?.approved && unapproved && (
@@ -80,47 +131,13 @@ export function EntityEditor({ entity, kind, projectId, options = {}, initial, h
           You have changes that are not approved yet. The approved version ({fmtDate(entity.approved_at)}) is unchanged until you approve these edits.
         </div>
       )}
-      {fields.map((f) => {
-        const cat = live ? fieldCategory(live, f.key) : flags[f.key] === 'clarify' ? 'clarify' : flags[f.key] === 'undecided' ? 'undecided' : 'user';
-        const empty = !(data[f.key] ?? '').trim();
-        const id = `f-${f.key}`;
-        return (
-          <div key={f.key}>
-            <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
-              <label htmlFor={id} className="font-medium">{f.label}</label>
-              <span className="flex items-center gap-2">
-                {empty && !flags[f.key] ? <span className="text-xs text-muted">Not answered yet</span> : <CategoryBadge cat={cat} />}
-              </span>
-            </div>
-            {f.help && <p className="mb-1 text-xs text-muted">{f.help}</p>}
-            {f.type === 'long' ? (
-              <textarea id={id} value={data[f.key] ?? ''} onChange={(e) => set(f.key, e.target.value)} className={cx(cat === 'ai' && 'ai-suggestion')} />
-            ) : f.type === 'select' ? (
-              <select id={id} value={data[f.key] ?? f.options![0]} onChange={(e) => set(f.key, e.target.value)}>
-                {f.options!.map((o) => <option key={o}>{o}</option>)}
-              </select>
-            ) : f.type === 'ref' ? (
-              <select id={id} value={data[f.key] ?? ''} onChange={(e) => set(f.key, e.target.value)}>
-                <option value="">— none —</option>
-                {refOptions(f).map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
-              </select>
-            ) : f.type === 'date' ? (
-              <input id={id} type="date" value={data[f.key] ?? ''} onChange={(e) => set(f.key, e.target.value)} />
-            ) : (
-              <>
-                <input id={id} list={f.suggestions ? `${id}-list` : undefined} value={data[f.key] ?? ''} onChange={(e) => set(f.key, e.target.value)} className={cx(cat === 'ai' && 'ai-suggestion')} />
-                {f.suggestions && <datalist id={`${id}-list`}>{f.suggestions.map((o) => <option key={o} value={o} />)}</datalist>}
-              </>
-            )}
-            {f.type !== 'select' && f.type !== 'ref' && f.type !== 'date' && (
-              <div className="mt-1 flex gap-3 text-xs text-muted">
-                <label className="flex items-center gap-1"><input type="checkbox" className="!w-auto" checked={flags[f.key] === 'clarify'} onChange={(e) => setFlag(f.key, e.target.checked ? 'clarify' : '')} /> Needs clarification</label>
-                <label className="flex items-center gap-1"><input type="checkbox" className="!w-auto" checked={flags[f.key] === 'undecided'} onChange={(e) => setFlag(f.key, e.target.checked ? 'undecided' : '')} /> Not decided</label>
-              </div>
-            )}
-          </div>
-        );
-      })}
+      {essential.map((f) => <div key={f.key}>{renderField(f)}</div>)}
+      {advanced.length > 0 && (
+        <details open={advancedHasContent} className="rounded-lg border border-line p-3">
+          <summary className="cursor-pointer select-none text-sm font-medium text-muted">More fields ({advanced.length}){!advancedHasContent && ' · all empty'}</summary>
+          <div className="mt-3 space-y-4">{advanced.map((f) => <div key={f.key}>{renderField(f)}</div>)}</div>
+        </details>
+      )}
 
       {err && <div role="alert" className="rounded-lg bg-bad-soft px-3 py-2 text-sm text-bad">{err}</div>}
 
