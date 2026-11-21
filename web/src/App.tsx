@@ -6,6 +6,7 @@ import { Button, cx, useAsync } from './ui.tsx';
 import { Overview, Projects, NewProject, ProjectDashboard, Definition } from './pages-projects.tsx';
 import { FeaturesPage, FeatureDetail, FeatureWizard } from './features.tsx';
 import { Kanban, Roadmap, Dependencies } from './planning.tsx';
+import { Assistant } from './assistant.tsx';
 import { Collection, HistoryPage, SettingsPage, GlobalIdeas, GlobalTasks, GlobalDocs, GlobalRoadmaps } from './pages-misc.tsx';
 
 export interface ProjectCtx { project: Entity; reload: () => void }
@@ -63,7 +64,7 @@ function Shell() {
         {pid && project.data && (
           <nav className="mt-5 space-y-0.5 border-t border-line pt-4" aria-label="Project">
             <div className="mb-1 truncate px-3 text-xs font-semibold uppercase tracking-wide text-muted">{project.data.entity.title}</div>
-            {[['', 'Dashboard'], ['definition', 'Project Definition'], ['parts', 'Application Parts'], ['features', 'Features'], ['roadmap', 'Roadmap'], ['tasks', 'Tasks'], ['dependencies', 'Dependencies'], ['docs', 'Documentation'], ['decisions', 'Decisions'], ['debt', 'Technical Debt'], ['history', 'Change History']].map(([to, label]) => (
+            {[['', 'Dashboard'], ['definition', 'Project Definition'], ['parts', 'Application Parts'], ['features', 'Features'], ['assistant', 'Planning Assistant'], ['roadmap', 'Roadmap'], ['tasks', 'Tasks'], ['dependencies', 'Dependencies'], ['docs', 'Documentation'], ['decisions', 'Decisions'], ['debt', 'Technical Debt'], ['history', 'Change History']].map(([to, label]) => (
               <NavLink key={to} to={`/p/${pid}${to ? '/' + to : ''}`} end={to === ''} className={linkCls}>{label}</NavLink>
             ))}
           </nav>
@@ -116,6 +117,7 @@ export function App() {
           <Route path="features/new" element={<FeatureWizard />} />
           <Route path="features/future" element={<FeatureWizard future />} />
           <Route path="features/:fid" element={<FeatureDetail />} />
+          <Route path="assistant" element={<Assistant />} />
           <Route path="roadmap" element={<Roadmap />} />
           <Route path="tasks" element={<Kanban />} />
           <Route path="dependencies" element={<Dependencies />} />

@@ -136,6 +136,38 @@ export function GlobalRoadmaps() {
   );
 }
 
+function AiSettings() {
+  const st = useAsync(() => api.aiStatus(), []);
+  const [key, setKey] = useState(''); const [msg, setMsg] = useState(''); const [err, setErr] = useState('');
+  const a = st.data;
+  const run = async (b: { apiKey?: string; enabled?: boolean; model?: string }, ok: string) => { setErr(''); setMsg(''); try { await api.aiSettings(b); setMsg(ok); setKey(''); st.reload(); } catch (x) { setErr((x as Error).message); } };
+  return (
+    <Card className="lg:col-span-2"><h2 className="mb-1 font-semibold">Claude planning assistant (optional)</h2>
+      <p className="mb-3 text-sm text-muted">The planner works fully without it. When on, Claude asks questions and makes <strong>suggestions</strong>. It cannot approve, complete, or change anything. You decide what to keep.</p>
+      <div className="mb-3 rounded-lg bg-warn-soft px-3 py-2 text-sm text-warn">
+        <strong>What leaves your server:</strong> the messages you write to the assistant plus a summary of the current project (definition, parts, feature names and descriptions) go to Anthropic to get an answer.
+        <strong> The key:</strong> it is stored in this app's database file on your server and never shown in the browser again. Anyone who can read the database or a Proxmox backup of this container could read it, so use a key with a spending limit and delete it here if you stop using the assistant.
+      </div>
+      {a && (
+        <div className="grid gap-4 md:grid-cols-2">
+          <form className="space-y-2" onSubmit={(e) => { e.preventDefault(); run({ apiKey: key }, 'Key saved. Now switch the assistant on.'); }}>
+            <label htmlFor="aikey" className="font-medium">Anthropic API key</label>
+            <p className="text-xs text-muted">Create one at console.anthropic.com. This is separate from a Claude subscription and is billed by use. {a.hasKey && <>Saved key ends in <code>{a.keyHint}</code>.</>}</p>
+            <input id="aikey" type="password" autoComplete="off" placeholder={a.hasKey ? 'Paste a new key to replace it' : 'sk-ant-…'} value={key} onChange={(e) => setKey(e.target.value)} />
+            <div className="flex gap-2"><Button variant="primary" disabled={!key.trim()}>Save key</Button>{a.hasKey && <Button type="button" variant="danger" onClick={() => run({ apiKey: '' }, 'Key removed and assistant switched off.')}>Remove key</Button>}</div>
+          </form>
+          <div className="space-y-2">
+            <label className="flex items-center gap-2 font-medium"><input type="checkbox" className="!w-auto" checked={a.enabled} disabled={!a.hasKey} onChange={(e) => run({ enabled: e.target.checked }, e.target.checked ? 'Assistant switched on.' : 'Assistant switched off.')} /> Use the Claude assistant</label>
+            <label htmlFor="aimodel" className="block font-medium">Model</label>
+            <select id="aimodel" value={a.model} onChange={(e) => run({ model: e.target.value }, 'Model saved.')}>{a.models.map((m) => <option key={m}>{m}</option>)}</select>
+            <p className="text-xs text-muted">The first is a good balance. Haiku is cheaper and quicker, Opus is the most capable and costs more.</p>
+          </div>
+        </div>)}
+      {err && <div role="alert" className="mt-2 text-bad">{err}</div>}{msg && <div role="status" className="mt-2 text-ok">{msg}</div>}
+    </Card>
+  );
+}
+
 export function SettingsPage() {
   const [cur, setCur] = useState(''); const [next, setNext] = useState(''); const [msg, setMsg] = useState(''); const [err, setErr] = useState('');
   const [imp, setImp] = useState(''); const file = useRef<HTMLInputElement>(null);
@@ -166,8 +198,7 @@ export function SettingsPage() {
             <Button variant="primary" disabled={!cur || !next}>Change password</Button>
           </form>
         </Card>
-        <Card><h2 className="mb-2 font-semibold">AI assistant</h2>
-          <p className="text-sm text-muted">Not enabled. The planner works fully without it. A Claude assistant can be added later as an optional layer. It would use an API key you provide, and its output would always be labelled as a suggestion.</p></Card>
+        <AiSettings />
       </div>
     </>
   );

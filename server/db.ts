@@ -56,6 +56,14 @@ export function openDb(path: string): DatabaseSync {
       after TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_history_project ON history(project_id, at);
+    CREATE TABLE IF NOT EXISTS ai_messages (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL,
+      role TEXT NOT NULL,
+      content TEXT NOT NULL,
+      at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_ai_messages_project ON ai_messages(project_id, at);
     CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS sessions (token_hash TEXT PRIMARY KEY, expires_at INTEGER NOT NULL);
   `);

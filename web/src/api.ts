@@ -30,7 +30,19 @@ export interface Summary {
 export interface HistoryItem { id: string; project_id: string; entity_id: string; kind: string; action: string; summary: string; actor: string; at: string }
 export interface Brief { markdown: string; complete: boolean; questions: string[] }
 
+export interface AiStatus { hasKey: boolean; keyHint: string; enabled: boolean; model: string; models: string[] }
+export interface Proposal { kind: 'feature'; data: Record<string, string>; part_id: string; user_said: string; unclear_fields: string[]; open_questions: string[]; my_suggestions: string[] }
+export interface LinkSuggestion { from_id: string; to_id: string; type: string; reason: string }
+
 export const api = {
+  aiStatus: () => req<AiStatus>('GET', '/ai/status'),
+  aiSettings: (b: { apiKey?: string; enabled?: boolean; model?: string }) => req<AiStatus>('POST', '/ai/settings', b),
+  aiHistory: (pid: string) => req<{ id: string; role: 'user' | 'assistant'; content: string; at: string }[]>('GET', `/ai/chat/${pid}`),
+  aiClear: (pid: string) => req('DELETE', `/ai/chat/${pid}`),
+  aiChat: (project_id: string, message: string) => req<{ reply: string; proposals: Proposal[] }>('POST', '/ai/chat', { project_id, message }),
+  aiSuggestLinks: (project_id: string) => req<{ suggestions: LinkSuggestion[]; note: string }>('POST', '/ai/suggest-links', { project_id }),
+  aiAccept: (project_id: string, p: Proposal) => req<Entity>('POST', '/ai/accept-feature', { project_id, data: p.data, part_id: p.part_id, unclear_fields: p.unclear_fields }),
+  addAiLink: (b: { project_id: string; from_id: string; to_id: string; type: string; note: string }) => req<Link>('POST', '/links', { ...b, source: 'ai', confirmed: false }),
   authStatus: () => req<{ passwordSet: boolean; loggedIn: boolean; minPassword: number }>('GET', '/auth/status'),
   login: (password: string) => req<{ ok: true }>('POST', '/auth/login', { password }),
   logout: () => req('POST', '/auth/logout', {}),

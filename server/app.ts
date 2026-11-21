@@ -10,6 +10,8 @@ import { Auth, LoginLimiter, isPrivateIp, MIN_PASSWORD } from './auth.ts';
 import { Store, HttpError } from './store.ts';
 import { buildBrief } from '../shared/brief.ts';
 import { KINDS } from '../shared/schema.ts';
+import { aiStatus, saveAiSettings, chat, chatHistory, clearChat, suggestLinks, acceptProposal } from './ai.ts';
+import type { FetchLike } from './ai.ts';
 
 export interface AppOptions {
   store: Store;
@@ -18,6 +20,7 @@ export interface AppOptions {
   trustedProxies?: string[];   // trust forwarded headers only when the connection comes from one of these addresses
   webDir?: string;
   limiter?: LoginLimiter;
+  fetchImpl?: FetchLike;        // how the server talks to Claude (replaced in tests)
   safetyCopy?: () => string; // writes a never-overwriting copy of the database, returns its path
 }
 
@@ -174,6 +177,16 @@ export function createApp(o: AppOptions) {
     const r = store.import(file);
     return c.json({ ...r, safetyCopy: backup });
   });
+
+  // ---------- optional Claude assistant (suggestions only) ----------
+  const doFetch: FetchLike = o.fetchImpl ?? ((url, init) => fetch(url, init));
+  app.get('/api/ai/status', (c) => c.json(aiStatus(store.db)));
+  app.post('/api/ai/settings', async (c) => c.json(saveAiSettings(store.db, await c.req.json().catch(() => ({})))));
+  app.get('/api/ai/chat/:pid', (c) => c.json(chatHistory(store.db, c.req.param('pid'))));
+  app.delete('/api/ai/chat/:pid', (c) => { clearChat(store.db, c.req.param('pid')); return c.json({ ok: true }); });
+  app.post('/api/ai/chat', async (c) => { const b = await c.req.json().catch(() => ({})); return c.json(await chat(store.db, store, doFetch, b.project_id, b.message)); });
+  app.post('/api/ai/suggest-links', async (c) => { const b = await c.req.json().catch(() => ({})); return c.json(await suggestLinks(store.db, store, doFetch, b.project_id)); });
+  app.post('/api/ai/accept-feature', async (c) => { const b = await c.req.json(); return c.json(acceptProposal(store, b.project_id, b), 201); });
 
   app.all('/api/*', (c) => c.json({ error: 'Not found' }, 404));
 

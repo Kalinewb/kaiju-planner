@@ -133,6 +133,9 @@ export function Dependencies() {
   const links = useAsync(() => api.links(project.id), [project.id]);
   const [from, setFrom] = useState(''); const [to, setTo] = useState(''); const [type, setType] = useState('depends_on'); const [confirmed, setConfirmed] = useState(false);
   const [target, setTarget] = useState(''); const [err, setErr] = useState('');
+  const ai = useAsync(() => api.aiStatus(), []);
+  const [sugg, setSugg] = useState<{ suggestions: import('./api.ts').LinkSuggestion[]; note: string } | null>(null);
+  const [asking, setAsking] = useState(false);
   const F = feats.data ?? [];
   const name = (id: string) => F.find((f) => f.id === id)?.title ?? '?';
   const rel = (links.data ?? []).filter((l) => l.type !== 'phase_feature');
@@ -174,6 +177,27 @@ export function Dependencies() {
             </div>)}
         </Card>
       </div>
+      {ai.data?.enabled && (
+        <Card className="mt-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div><h2 className="font-semibold">Ask Claude for possible relationships</h2><p className="text-sm text-muted">Claude only suggests. Each suggestion stays "possible" until you confirm it. Feature descriptions are sent to Anthropic.</p></div>
+            <Button disabled={asking} onClick={async () => { setAsking(true); setErr(''); try { setSugg(await api.aiSuggestLinks(project.id)); } catch (x) { setErr((x as Error).message); } finally { setAsking(false); } }}>{asking ? 'Asking…' : 'Suggest relationships'}</Button>
+          </div>
+          {sugg && (
+            <div className="mt-3 space-y-2">
+              {sugg.note && <p className="rounded-lg bg-ai-soft px-3 py-2 text-sm text-ai">{sugg.note}</p>}
+              {sugg.suggestions.length === 0 && <p className="text-sm text-muted">No new suggestions.</p>}
+              {sugg.suggestions.map((s, i) => (
+                <div key={i} className="ai-suggestion rounded-lg p-3 text-sm">
+                  <div className="font-medium">"{name(s.from_id)}" {LINK_TYPES[s.type]} "{name(s.to_id)}"</div>
+                  <div className="text-muted">Why Claude thinks so: {s.reason}</div>
+                  <div className="mt-2 flex gap-2">
+                    <Button onClick={async () => { try { await api.addAiLink({ project_id: project.id, from_id: s.from_id, to_id: s.to_id, type: s.type, note: s.reason }); setSugg({ ...sugg, suggestions: sugg.suggestions.filter((_, j) => j !== i) }); links.reload(); } catch (x) { setErr((x as Error).message); } }}>Add as possible</Button>
+                    <Button variant="ghost" onClick={() => setSugg({ ...sugg, suggestions: sugg.suggestions.filter((_, j) => j !== i) })}>Dismiss</Button>
+                  </div>
+                </div>))}
+            </div>)}
+        </Card>)}
       <h2 className="mb-2 mt-6 font-semibold">All relationships</h2>
       <Card>
         {rel.length === 0 ? <p className="text-muted">No relationships recorded yet.</p> : (

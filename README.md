@@ -18,7 +18,17 @@ It is not a to-do list. It covers the path from an idea to features, tasks, a ro
 
 Projects and guided project definition · Parts of the application · Features with guided creation and future-feature planning · Tasks (Kanban) · Roadmap phases · Dependencies and impact check · Decisions · Documentation · Technical debt · Change history · Claude Code briefs (preview, edit, approve, copy, export) · Export/import · Light and dark theme.
 
-**Not built yet:** the optional Claude assistant (Settings explains this) and automatic detection of possible relationships. Everything works without AI.
+**Optional Claude assistant** (off by default, see below). Everything else works without AI.
+
+## The Claude assistant (optional)
+
+Turn it on in **Settings** with your own Anthropic API key (console.anthropic.com, billed by use, separate from a Claude subscription).
+
+- **Planning Assistant** (per project): talk an idea through. Claude asks one or two plain-language questions at a time and only proposes a feature once it has enough from you. A proposal shows what you said, what is still unclear, and Claude's own ideas **separately as suggestions**.
+- **Possible relationships** (Dependencies page): Claude suggests which features may be related, with its reasoning.
+- **Claude can only suggest.** Proposals are shown to you and save nothing. If you keep one it becomes a **draft** (status "Proposed", labelled *AI suggestion*, not your original words). Suggested relationships stay *possible* until you confirm them. Claude cannot approve, complete, decide, or delete anything. Editing an AI-written field makes it yours.
+- **What is sent to Anthropic:** your messages and a summary of the current project (definition, parts, feature names and descriptions). Project text is passed as data, with instructions telling Claude to ignore any commands inside it.
+- **The key** lives in the app's database on your server, is never sent back to the browser, and is not part of exports. It *is* in the database file, so it is also in Proxmox backups of the container. Use a key with a spending limit and remove it in Settings if you stop using the assistant.
 
 ## Install on Proxmox
 

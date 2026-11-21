@@ -205,6 +205,7 @@ export class Store {
         for (const x of ids) tx.prepare('DELETE FROM revisions WHERE entity_id = ?').run(x);
         tx.prepare('DELETE FROM entities WHERE project_id = ?').run(id);
         tx.prepare('DELETE FROM links WHERE project_id = ?').run(id);
+        tx.prepare('DELETE FROM ai_messages WHERE project_id = ?').run(id);
       } else {
         for (const ref of refs) {
           const o = this.get(ref.id);
