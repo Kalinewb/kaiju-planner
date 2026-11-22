@@ -12,6 +12,7 @@ import { Store, HttpError } from './store.ts';
 import { buildBrief } from '../shared/brief.ts';
 import { KINDS, ISSUE_OPEN, ISSUE_RETEST, ISSUE_CLOSED, ISSUE_OWNER_ONLY } from '../shared/schema.ts';
 import { buildIssueBrief } from '../shared/issue-brief.ts';
+import { buildDesignSpec, parseElements } from '../shared/uikit.ts';
 import { descendantIds, pathTo } from '../shared/tree.ts';
 import { aiStatus, saveAiSettings, chat, chatHistory, clearChat, suggestLinks, acceptProposal } from './ai.ts';
 import type { FetchLike } from './ai.ts';
@@ -211,6 +212,15 @@ export function createApp(o: AppOptions) {
     const b = await c.req.json().catch(() => null);
     return c.json(bulkImport(store, b, { dry_run: b?.dry_run === true }));
   });
+  // ---------- UI designs ----------
+  app.get('/api/entities/:id/design-spec', (c) => {
+    const part = store.get(c.req.param('id'));
+    if (part.kind !== 'part') throw new HttpError(400, 'Ask for the design of a component.');
+    const pages = store.list({ project_id: part.project_id!, kind: 'page' }).filter((p) => p.data.part_id === part.id);
+    const spec = buildDesignSpec(part.title, pages.map((p) => ({ name: p.title, elements: parseElements(p.data.elements) })));
+    return c.json({ markdown: spec.markdown, gaps: spec.gaps, pages: pages.map((p) => ({ id: p.id, name: p.title })) });
+  });
+
   // ---------- issues (QA) ----------
   const issuesFor = (pid: string, q: Record<string, string | undefined>) => {
     const all = store.list({ project_id: pid });

@@ -2,6 +2,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import { randomUUID } from 'node:crypto';
 import { KINDS, FEATURE_NEEDS_APPROVAL } from '../shared/schema.ts';
 import type { Entity, Link } from '../shared/schema.ts';
+import { parseElements } from '../shared/uikit.ts';
 
 export class HttpError extends Error {
   status: number;
@@ -86,6 +87,11 @@ export class Store {
     }
   }
 
+  private checkElements(data: Record<string, string>) {
+    if (data.elements === undefined) return;
+    try { parseElements(data.elements); } catch (e) { throw new HttpError(400, (e as Error).message); }
+  }
+
   /** A component cannot live inside itself or inside something it contains, and the tree stays a sensible depth. */
   private checkParent(id: string | null, data: Record<string, string>) {
     const parent = data.parent_id;
@@ -115,6 +121,7 @@ export class Store {
     const data = this.cleanData(input.kind, input.data ?? {});
     this.checkRefs(project_id, input.kind, data);
     if (input.kind === 'part') this.checkParent(null, data);
+    if (input.kind === 'page') this.checkElements(data);
     const status = input.status ?? def.statuses?.[0] ?? '';
     this.checkStatusAllowed(def.kind, status, false);
     const id = randomUUID();
@@ -140,13 +147,15 @@ export class Store {
     const data = { ...e.data, ...incoming };
     this.checkRefs(e.project_id, e.kind, data);
     if (e.kind === 'part') this.checkParent(e.id, data);
+    if (e.kind === 'page') this.checkElements(data);
     const prov = { ...e.prov };
     for (const k of Object.keys(incoming)) prov[k] = patch.prov?.[k] ?? 'user';
     const flags = { ...e.flags };
     for (const [k, v] of Object.entries(patch.flags ?? {})) { if (v) flags[k] = v; else delete flags[k]; }
     const title = data[def.titleField] ?? '';
     this.db.prepare('UPDATE entities SET data=?, prov=?, flags=?, title=?, updated_at=? WHERE id=?').run(J(data), J(prov), J(flags), title, now(), id);
-    const changed = Object.keys(incoming).filter((k) => (before[k] ?? '') !== (data[k] ?? ''));
+    // Autosaving a design would flood the history, so the elements of a page are not logged one save at a time.
+    const changed = Object.keys(incoming).filter((k) => (before[k] ?? '') !== (data[k] ?? '') && !(e.kind === 'page' && k === 'elements'));
     if (changed.length) {
       const labels = changed.map((k) => def.fields.find((f) => f.key === k)?.label ?? k).join(', ');
       const note = e.approved ? ' (approved version kept until you approve the change)' : '';
@@ -159,7 +168,11 @@ export class Store {
   assertAiMayEdit(id: string, keys: string[]) {
     const e = this.get(id);
     if (e.approved) throw new HttpError(409, `"${e.title}" has been approved by you, so Claude cannot change it. Make the change in the app.`);
-    const blocked = keys.filter((k) => (e.data[k] ?? '').trim() && e.prov[k] !== 'ai');
+    // A field is Claude's if Claude wrote it, or if Claude created this record and nobody has edited the field since
+    // (an edit by the owner always marks the field as theirs). That lets Claude fix its own placement mistakes.
+    const creator = (this.db.prepare("SELECT actor FROM history WHERE entity_id = ? AND action = 'created' ORDER BY at LIMIT 1").get(id) as { actor: string } | undefined)?.actor ?? '';
+    const claudeCreated = /^Claude/.test(creator);
+    const blocked = keys.filter((k) => (e.data[k] ?? '').trim() && e.prov[k] !== 'ai' && !(claudeCreated && e.prov[k] === undefined));
     if (blocked.length) throw new HttpError(409, `These fields contain text you wrote, so Claude cannot overwrite them: ${blocked.map((k) => KINDS[e.kind].fields.find((f) => f.key === k)?.label ?? k).join(', ')}.`, { protectedFields: blocked });
   }
 

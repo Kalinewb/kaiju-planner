@@ -29,6 +29,16 @@ A project is a **tree of components**. Each component has a type you choose (Plu
 - **Safe moves:** a component cannot be placed inside itself or its own contents. Deleting one asks first and moves what was inside it to the top level. Nothing is deleted with it.
 - **Claude Code import:** `parts` accept `type` and `parent` (by name, in any order), and phases, decisions and docs accept `part`.
 
+## UI builder (the Design tab)
+
+Every component has a **Design** tab for sketching its screens from the omarchy-ui kit's elements.
+
+- **Pages:** add as many as you need, rename them, reorder them, delete them. Each saves by itself ("Saved ✓").
+- **Elements:** section header, row, switch, selector (several buttons, one active at a time), stepper, dropdown, text field, button, tip, notice, empty state and progress ring. Each is the kit component it is named after (USection, URow, USwitch, USegmented, UStepper, UPick, UField, UButton, UTip, UNotice, UEmpty, URing). Every element has labels, a placeholder icon from a small set, and the properties that component really has.
+- **Preview:** a mock-up in the kit's style, in *Hosted black* or *Light*. Switches, selectors, steppers and sliders respond so you can feel the layout. Click an element to edit it.
+- **Gaps in the kit:** the kit has no slider yet. You can still use one (and a *Custom element*): they are flagged **NOT IN KIT**, listed under "Missing from the UI kit", and **Track as a kit issue** files an issue against the UI kit component.
+- **Spec for Claude Code:** *Copy spec* or *Download .md* gives a written spec per page naming the kit component, properties, keys and icon names. Claude Code can read it with `kaiju_get_design`, and can draw pages itself with `kaiju_add_item` (kind `page`).
+
 ## QA: issues and comments
 
 - **Issues** (sidebar, with an open count; also a tab on every component): report what is wrong, how to see it, what you expected, how bad it is, and a **suggested fix**. Each issue points at a component and optionally a feature. Use **Report an issue** on a component or feature page and the place is filled in for you.

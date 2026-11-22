@@ -17,6 +17,7 @@ function urlFor(e: Entity): string {
     case 'doc': return `/p/${pid}/docs`;
     case 'debt': return `/p/${pid}/debt`;
     case 'issue': return `/p/${pid}/issues`;
+    case 'page': return `/p/${pid}/n/${e.data.part_id}/design`;
     default: return `/p/${pid}`;
   }
 }

@@ -28,7 +28,7 @@ export interface KindDef {
   fields: Field[];
 }
 
-export const PART_TYPES = ['Plugin', 'Subplugin', 'Addon', 'Integration', 'Module', 'Component'];
+export const PART_TYPES = ['Plugin', 'Subplugin', 'Integration', 'Addon', 'Module', 'Library', 'Group'];
 export const INSTALL_STATES = ['Not set', 'Not installed', 'Installed', 'Installed and pinned', 'Local copy only'];
 export const PRIORITIES = ['Not set', 'Low', 'Medium', 'High', 'Critical'];
 export const COMPLEXITY = ['Not estimated', 'Small', 'Medium', 'Large', 'Very large'];
@@ -209,6 +209,16 @@ export const KINDS: Record<string, KindDef> = {
       l('steps', 'How to see it', 'Steps to reproduce, one per line.'),
       l('expected', 'What you expected instead'),
       t('found_in', 'Found in version or commit'),
+    ],
+  },
+  page: {
+    kind: 'page', label: 'Screen page', plural: 'Screen pages', titleField: 'name', approvable: false,
+    help: 'One page of a component\'s screen design, built from the UI kit\'s elements in the UI builder.',
+    fields: [
+      t('name', 'Page name'),
+      r('part_id', 'Component', 'part'),
+      { key: 'elements', label: 'Elements', type: 'long', hidden: true },
+      l('notes', 'Notes for Claude Code'),
     ],
   },
   brief: {

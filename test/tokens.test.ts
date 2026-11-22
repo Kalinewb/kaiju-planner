@@ -152,3 +152,16 @@ test('snapshot gives Claude the whole project to read', async () => {
   const snap = (await claude('GET', `/api/projects/${r.project_id}/snapshot`)).json;
   assert.equal(snap.parts.length, 1); assert.equal(snap.project.title, 'S');
 });
+
+test('Claude can fix where it put its own records, but never the owner\'s, and never after the owner edited it', async () => {
+  const { owner, claude } = await withToken();
+  const pid = (await owner('POST', '/api/entities', { kind: 'project', data: { name: 'P' } })).json.id;
+  const a = (await owner('POST', '/api/entities', { kind: 'part', project_id: pid, data: { name: 'A' } })).json.id;
+  const b = (await owner('POST', '/api/entities', { kind: 'part', project_id: pid, data: { name: 'B' } })).json.id;
+  const mine = (await claude('POST', '/api/entities', { kind: 'feature', project_id: pid, data: { name: 'Made by Claude', part_id: a } })).json;
+  assert.equal((await claude('PATCH', `/api/entities/${mine.id}`, { data: { part_id: b } })).json.data.part_id, b); // re-homing its own record
+  const theirs = (await owner('POST', '/api/entities', { kind: 'feature', project_id: pid, data: { name: 'Owner feature', part_id: a } })).json;
+  assert.equal((await claude('PATCH', `/api/entities/${theirs.id}`, { data: { part_id: b } })).status, 409);
+  await owner('PATCH', `/api/entities/${mine.id}`, { data: { part_id: a } }); // the owner moved it back: now it is theirs
+  assert.equal((await claude('PATCH', `/api/entities/${mine.id}`, { data: { part_id: b } })).status, 409);
+});

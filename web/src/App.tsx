@@ -9,6 +9,7 @@ import { Kanban, Roadmap, Dependencies } from './planning.tsx';
 import { Assistant } from './assistant.tsx';
 import { NeedsYou } from './needs.tsx';
 import { IssuesPage } from './issues.tsx';
+import { DesignPage } from './designer.tsx';
 import { CommandPalette } from './palette.tsx';
 import { Structure, NodeLayout, NodeOverview, SidebarTree } from './structure.tsx';
 import { ScopeContext } from './scope.tsx';
@@ -149,6 +150,7 @@ export function App() {
             <Route path="docs" element={<Collection kind="doc" />} />
             <Route path="debt" element={<Collection kind="debt" />} />
             <Route path="issues" element={<IssuesPage />} />
+            <Route path="design" element={<DesignPage />} />
           </Route>
           <Route path="features" element={<FeaturesPage />} />
           <Route path="features/new" element={<FeatureWizard />} />

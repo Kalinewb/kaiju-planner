@@ -42,6 +42,7 @@ export interface Attention { decide: AttentionItem[]; drafts: AttentionItem[]; c
 export interface IssueRow { issue: Entity; where: string; comment_count: number }
 
 export const api = {
+  reorder: (ids: string[]) => req('POST', '/reorder', { ids }),
   issues: (pid: string, q: Record<string, string> = {}) => req<IssueRow[]>('GET', `/projects/${pid}/issues?` + new URLSearchParams(q)),
   issuesBrief: (pid: string, q: Record<string, string> = {}) => req<{ count: number; markdown: string }>('GET', `/projects/${pid}/issues-brief?` + new URLSearchParams(q)),
   issueBrief: (id: string) => req<{ count: number; markdown: string }>('GET', `/entities/${id}/issue-brief`),

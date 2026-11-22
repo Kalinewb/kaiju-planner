@@ -18,7 +18,8 @@ function useStructureData(pid: string) {
   const feats = useAsync(() => api.list({ project: pid, kind: 'feature' }), [pid]);
   const tasks = useAsync(() => api.list({ project: pid, kind: 'task' }), [pid]);
   const issues = useAsync(() => api.list({ project: pid, kind: 'issue' }), [pid]);
-  return { parts, feats, tasks, loaded: !!(parts.data && feats.data && tasks.data && issues.data), P: parts.data ?? [], F: feats.data ?? [], T: tasks.data ?? [], I: issues.data ?? [], reload: () => { parts.reload(); feats.reload(); tasks.reload(); issues.reload(); } };
+  const pages = useAsync(() => api.list({ project: pid, kind: 'page' }), [pid]);
+  return { parts, feats, tasks, loaded: !!(parts.data && feats.data && tasks.data && issues.data), P: parts.data ?? [], F: feats.data ?? [], T: tasks.data ?? [], I: issues.data ?? [], PG: pages.data ?? [], reload: () => { parts.reload(); feats.reload(); tasks.reload(); issues.reload(); pages.reload(); } };
 }
 
 /** Add or edit a component in a side drawer. */
@@ -271,7 +272,7 @@ export function NodeLayout() {
         </div>
       </div>
       <div className="mb-5 flex overflow-x-auto border-b border-line" role="tablist">
-        {tab('', 'Overview')}{tab('/features', 'Features', nF)}{tab('/issues', 'Issues', nI)}{tab('/tasks', 'Tasks', nT)}{tab('/roadmap', 'Roadmap')}{tab('/decisions', 'Decisions')}{tab('/docs', 'Docs')}{tab('/debt', 'Debt')}
+        {tab('', 'Overview')}{tab('/features', 'Features', nF)}{tab('/issues', 'Issues', nI)}{tab('/design', 'Design', d.PG.filter((p) => p.data.part_id === node.id).length)}{tab('/tasks', 'Tasks', nT)}{tab('/roadmap', 'Roadmap')}{tab('/decisions', 'Decisions')}{tab('/docs', 'Docs')}{tab('/debt', 'Debt')}
       </div>
       <Outlet context={{ ...ctx, node, parts: d.P, features: d.F, tasks: d.T, reloadStructure: d.reload }} />
       {editing && <ComponentDrawer pid={project.id} parts={d.P} target={node} onClose={() => setEditing(false)} onDone={() => { setEditing(false); d.reload(); }} />}
