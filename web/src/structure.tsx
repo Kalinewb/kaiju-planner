@@ -5,8 +5,8 @@ import type { Entity } from '../../shared/schema.ts';
 import { PART_TYPES } from '../../shared/schema.ts';
 import { buildTree, descendantIds, nodeStats, pathTo } from '../../shared/tree.ts';
 import type { TreeNode } from '../../shared/tree.ts';
-import { api } from './api.ts';
-import { Button, Card, Drawer, Empty, PageHeader, Progress, StatusBadge, TypeBadge, cx, useAsync } from './ui.tsx';
+import { api, ApiError } from './api.ts';
+import { Button, Card, Confirm, Drawer, Empty, PageHeader, Progress, StatusBadge, TypeBadge, cx, useAsync } from './ui.tsx';
 import { EntityEditor } from './EntityEditor.tsx';
 import { StatusControl } from './status.tsx';
 import { ReportIssueButton } from './issues.tsx';
@@ -280,6 +280,24 @@ export function NodeLayout() {
   );
 }
 
+/** A visible way to delete something inside a component, with the usual confirmation. */
+function RemoveChild({ part, onDone }: { part: Entity; onDone: () => void }) {
+  const [ask, setAsk] = useState<null | { references: { title: string; field: string }[] }>(null); const [err, setErr] = useState('');
+  async function del(force: boolean) {
+    try { await api.remove(part.id, force); setAsk(null); onDone(); }
+    catch (x) { if (x instanceof ApiError && x.status === 409 && x.body?.references) setAsk({ references: x.body.references }); else { setErr((x as Error).message); setAsk(null); } }
+  }
+  return (
+    <>
+      <Button variant="ghost" aria-label={`Delete ${part.title}`} onClick={() => setAsk({ references: [] })}>Delete</Button>
+      {err && <span role="alert" className="text-xs text-bad">{err}</span>}
+      {ask && <Confirm danger title={`Delete "${part.title}"?`} confirmLabel={ask.references.length ? 'Delete anyway' : 'Delete'}
+        body={ask.references.length ? <div><p>These records use it. They stay, but lose the connection:</p><ul className="mt-2 list-disc pl-5">{ask.references.map((r, i) => <li key={i}>{r.title || 'Untitled'} ({r.field})</li>)}</ul></div> : <p>This cannot be undone. Anything inside it moves to the top level.</p>}
+        onConfirm={() => del(ask.references.length > 0)} onCancel={() => setAsk(null)} />}
+    </>
+  );
+}
+
 export function NodeOverview() {
   const { project, node, parts, features, tasks, reloadStructure } = useProjectNode();
   const [drawer, setDrawer] = useState<null | Entity | { initial: Record<string, string> }>(null);
@@ -302,7 +320,7 @@ export function NodeOverview() {
           {kids.length === 0 ? <p className="text-sm text-muted">Nothing inside yet.</p> : (
             <ul className="mb-3 divide-y divide-line">{kids.map((k) => { const s = nodeStats(parts, features, tasks, k.id, true); return (
               <li key={k.id} className="flex flex-wrap items-center gap-2 py-2"><TypeBadge type={k.data.type} /><Link className="font-medium hover:text-accent" to={`${base}/n/${k.id}`}>{k.title}</Link>
-                <span className="text-xs text-muted">{s.features} features · {s.tasksOpen} open tasks</span><div className="ml-auto w-20"><Progress value={s.progress} /></div></li>); })}</ul>)}
+                <span className="text-xs text-muted">{s.features} features · {s.tasksOpen} open tasks</span><div className="ml-auto flex items-center gap-2"><div className="w-20"><Progress value={s.progress} /></div><RemoveChild part={k} onDone={reloadStructure} /></div></li>); })}</ul>)}
           <div className="flex flex-wrap gap-2">{quick.map((t) => <Button key={t} onClick={() => setDrawer({ initial: { parent_id: node.id, type: t } })}>+ {t}</Button>)}<Button variant="ghost" onClick={() => setDrawer({ initial: { parent_id: node.id } })}>+ Other</Button></div>
         </Card>
         <Card>
