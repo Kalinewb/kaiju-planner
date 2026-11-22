@@ -10,7 +10,9 @@ import { Auth, ApiTokens, LoginLimiter, isPrivateIp, MIN_PASSWORD } from './auth
 import { bulkImport } from './bulk.ts';
 import { Store, HttpError } from './store.ts';
 import { buildBrief } from '../shared/brief.ts';
-import { KINDS } from '../shared/schema.ts';
+import { KINDS, ISSUE_OPEN, ISSUE_RETEST, ISSUE_CLOSED, ISSUE_OWNER_ONLY } from '../shared/schema.ts';
+import { buildIssueBrief } from '../shared/issue-brief.ts';
+import { descendantIds, pathTo } from '../shared/tree.ts';
 import { aiStatus, saveAiSettings, chat, chatHistory, clearChat, suggestLinks, acceptProposal } from './ai.ts';
 import type { FetchLike } from './ai.ts';
 
@@ -175,6 +177,8 @@ export function createApp(o: AppOptions) {
     const b = await c.req.json();
     if (c.get('principal') === 'claude') {
       // The owner gave this token the power to change statuses, but every change needs a stated reason.
+      const target = store.get(c.req.param('id'));
+      if (target.kind === 'issue' && ISSUE_OWNER_ONLY.includes(b.status)) throw new HttpError(403, `Only you can set an issue to "${b.status}". Claude can say "Fixed (needs retest)" and you verify it.`);
       const note = typeof b.note === 'string' ? b.note.trim() : '';
       if (note.length < 3) throw new HttpError(400, 'Say why in "note" (at least 3 characters). Every status change by Claude needs a reason.');
       return c.json(store.setStatus(c.req.param('id'), b.status, true, 'Claude Code', note.slice(0, 1000)));
@@ -207,6 +211,37 @@ export function createApp(o: AppOptions) {
     const b = await c.req.json().catch(() => null);
     return c.json(bulkImport(store, b, { dry_run: b?.dry_run === true }));
   });
+  // ---------- issues (QA) ----------
+  const issuesFor = (pid: string, q: Record<string, string | undefined>) => {
+    const all = store.list({ project_id: pid });
+    const parts = all.filter((e) => e.kind === 'part'); const features = all.filter((e) => e.kind === 'feature');
+    const states = q.status === 'open' ? ISSUE_OPEN : q.status === 'retest' ? ISSUE_RETEST : q.status === 'closed' ? ISSUE_CLOSED : null;
+    const scope = q.part ? new Set([q.part, ...(q.inside === '1' ? descendantIds(parts, q.part) : [])]) : null;
+    const needle = (q.q ?? '').toLowerCase();
+    const issues = all.filter((e) => e.kind === 'issue')
+      .filter((e) => (!states || states.includes(e.status)) && (!q.severity || (e.data.severity || 'Not set') === q.severity)
+        && (!scope || scope.has(e.data.part_id) || (!e.data.part_id && !!e.data.feature_id && scope.has(features.find((f) => f.id === e.data.feature_id)?.data.part_id ?? '')))
+        && (!needle || (e.title + ' ' + (e.data.problem ?? '')).toLowerCase().includes(needle)));
+    return { issues, parts, features };
+  };
+  app.get('/api/projects/:id/issues', (c) => {
+    const pid = c.req.param('id');
+    const { issues, parts } = issuesFor(pid, c.req.query());
+    const counts = store.commentCounts(pid);
+    return c.json(issues.map((i) => ({ issue: i, where: i.data.part_id ? pathTo(parts, i.data.part_id).map((p) => p.title).join(' > ') : '', comment_count: counts[i.id] ?? 0 })));
+  });
+  app.get('/api/projects/:id/issues-brief', (c) => {
+    const pid = c.req.param('id');
+    const { issues, parts, features } = issuesFor(pid, c.req.query());
+    return c.json({ count: issues.length, markdown: buildIssueBrief({ issues, parts, features, comments: store.commentsFor(pid), title: c.req.query('title') }) });
+  });
+  app.get('/api/entities/:id/issue-brief', (c) => {
+    const i = store.get(c.req.param('id'));
+    if (i.kind !== 'issue') throw new HttpError(400, 'That is not an issue.');
+    const pid = i.project_id!;
+    const all = store.list({ project_id: pid });
+    return c.json({ count: 1, markdown: buildIssueBrief({ issues: [i], parts: all.filter((e) => e.kind === 'part'), features: all.filter((e) => e.kind === 'feature'), comments: store.commentsFor(pid), title: `Issue: ${i.title}` }) });
+  });
   app.get('/api/projects/:id/attention', (c) => c.json(store.attention(c.req.param('id'))));
   app.post('/api/projects/:id/approve-many', async (c) => {
     const b = await c.req.json().catch(() => ({}));
@@ -218,7 +253,7 @@ export function createApp(o: AppOptions) {
     const id = c.req.param('id');
     const all = store.list({ project_id: id });
     const pick = (k: string) => all.filter((e) => e.kind === k);
-    return c.json({ project: store.get(id), parts: pick('part'), features: pick('feature'), tasks: pick('task'), phases: pick('phase'), decisions: pick('decision'), docs: pick('doc'), debt: pick('debt'), links: store.links(id), summary: store.summary(id) });
+    return c.json({ project: store.get(id), parts: pick('part'), features: pick('feature'), tasks: pick('task'), phases: pick('phase'), decisions: pick('decision'), docs: pick('doc'), debt: pick('debt'), issues: pick('issue'), links: store.links(id), summary: store.summary(id) });
   });
 
   // Access tokens (owner only)

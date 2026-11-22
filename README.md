@@ -29,6 +29,14 @@ A project is a **tree of components**. Each component has a type you choose (Plu
 - **Safe moves:** a component cannot be placed inside itself or its own contents. Deleting one asks first and moves what was inside it to the top level. Nothing is deleted with it.
 - **Claude Code import:** `parts` accept `type` and `parent` (by name, in any order), and phases, decisions and docs accept `part`.
 
+## QA: issues and comments
+
+- **Issues** (sidebar, with an open count; also a tab on every component): report what is wrong, how to see it, what you expected, how bad it is, and a **suggested fix**. Each issue points at a component and optionally a feature. Use **Report an issue** on a component or feature page and the place is filled in for you.
+- **Comments** on any item, with the author shown (You or Claude Code).
+- **Claude can read them on request.** Claude Code tools: `kaiju_list_issues` (filter by open / needs retest / closed, severity, component, with "include everything inside"), `kaiju_get_issue`, and `kaiju_issues_brief`, a ready-to-act-on Markdown work list. In the app, **Copy as Markdown for Claude Code** gives you the same list to paste yourself.
+- **Claude can report and suggest.** It can add issues it finds and fill an empty *Suggested fix*, always labelled *AI suggestion* and never overwriting your text. With a *manager* token it can comment, set *In progress* and *Fixed (needs retest)* with the commit as its reason.
+- **Only you can sign off:** *Verified* and *Won't fix* are owner-only, whatever the token.
+
 ## Keeping it clear
 
 - **Needs you** (sidebar, with a count): everything waiting for your call. Open decisions and questions at the top. Below, every unapproved draft, grouped by type, with tick boxes and **Approve selected**. Nothing is ticked by default, decisions without a chosen solution are never bulk-approved, and Claude's tokens cannot use it.

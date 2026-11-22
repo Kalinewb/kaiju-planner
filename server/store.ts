@@ -273,6 +273,12 @@ export class Store {
     this.db.prepare('DELETE FROM comments WHERE id = ?').run(id);
     this.log(r.project_id, r.entity_id, null, 'comment removed', `Removed a comment by ${r.author}`);
   }
+  commentsFor(project_id: string) {
+    const rows = this.db.prepare('SELECT entity_id, author, body, at FROM comments WHERE project_id = ? ORDER BY at, rowid').all(project_id) as { entity_id: string; author: string; body: string; at: string }[];
+    const out: Record<string, { author: string; body: string; at: string }[]> = {};
+    for (const r of rows) (out[r.entity_id] ??= []).push({ author: r.author, body: r.body, at: r.at });
+    return out;
+  }
   commentCounts(project_id: string): Record<string, number> {
     const rows = this.db.prepare('SELECT entity_id, COUNT(*) AS n FROM comments WHERE project_id = ? GROUP BY entity_id').all(project_id) as { entity_id: string; n: number }[];
     return Object.fromEntries(rows.map((r) => [r.entity_id, r.n]));
@@ -338,7 +344,8 @@ export class Store {
     }
     const dec = new Set(decide.map((d) => d.id));
     const shown = drafts.filter((d) => !(d.kind === 'decision' && dec.has(d.id)));
-    return { decide, drafts: shown, count: decide.length + shown.length };
+    const issues_open = all.filter((e) => e.kind === 'issue' && ['Open', 'Confirmed', 'In progress'].includes(e.status)).length;
+    return { decide, drafts: shown, count: decide.length + shown.length, issues_open };
   }
 
   /** Approve several things at once. Only on the owner's explicit say-so. Decisions without a chosen solution are never approved this way. */

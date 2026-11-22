@@ -38,9 +38,13 @@ export interface TokenInfo { id: string; name: string; scope: string; created_at
 export interface CommentRow { id: string; entity_id: string; author: string; body: string; at: string }
 
 export interface AttentionItem { id: string; kind: string; title: string; status: string; why: string; part_id: string }
-export interface Attention { decide: AttentionItem[]; drafts: AttentionItem[]; count: number }
+export interface Attention { decide: AttentionItem[]; drafts: AttentionItem[]; count: number; issues_open: number }
+export interface IssueRow { issue: Entity; where: string; comment_count: number }
 
 export const api = {
+  issues: (pid: string, q: Record<string, string> = {}) => req<IssueRow[]>('GET', `/projects/${pid}/issues?` + new URLSearchParams(q)),
+  issuesBrief: (pid: string, q: Record<string, string> = {}) => req<{ count: number; markdown: string }>('GET', `/projects/${pid}/issues-brief?` + new URLSearchParams(q)),
+  issueBrief: (id: string) => req<{ count: number; markdown: string }>('GET', `/entities/${id}/issue-brief`),
   attention: (pid: string) => req<Attention>('GET', `/projects/${pid}/attention`),
   approveMany: (pid: string, ids: string[]) => req<{ approved: number; ids: string[]; skipped: { id: string; title: string; reason: string }[] }>('POST', `/projects/${pid}/approve-many`, { ids }),
   tokens: () => req<TokenInfo[]>('GET', '/tokens'),

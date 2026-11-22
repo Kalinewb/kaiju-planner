@@ -8,6 +8,7 @@ import { FeaturesPage, FeatureDetail, FeatureWizard } from './features.tsx';
 import { Kanban, Roadmap, Dependencies } from './planning.tsx';
 import { Assistant } from './assistant.tsx';
 import { NeedsYou } from './needs.tsx';
+import { IssuesPage } from './issues.tsx';
 import { CommandPalette } from './palette.tsx';
 import { Structure, NodeLayout, NodeOverview, SidebarTree } from './structure.tsx';
 import { ScopeContext } from './scope.tsx';
@@ -69,6 +70,7 @@ function Shell() {
             <div className="mb-1 truncate px-3 text-xs font-semibold uppercase tracking-wide text-muted">{project.data.entity.title}</div>
             <NavLink to={`/p/${pid}`} end className={linkCls}>Dashboard</NavLink>
             <NavLink to={`/p/${pid}/needs`} className={linkCls}><span className="flex items-center justify-between">Needs you{(attn.data?.count ?? 0) > 0 && <span className="rounded-full bg-warn-soft px-2 text-xs text-warn">{attn.data!.count}</span>}</span></NavLink>
+            <NavLink to={`/p/${pid}/issues`} className={linkCls}><span className="flex items-center justify-between">Issues{(attn.data?.issues_open ?? 0) > 0 && <span className="rounded-full bg-bad-soft px-2 text-xs text-bad">{attn.data!.issues_open}</span>}</span></NavLink>
             <NavLink to={`/p/${pid}/structure`} className={linkCls}>Structure</NavLink>
             <div className="pb-1 pl-1"><SidebarTree pid={pid} /></div>
             <NavLink to={`/p/${pid}/definition`} className={linkCls}>Project Definition</NavLink>
@@ -133,6 +135,7 @@ export function App() {
           <Route path="definition" element={<Definition />} />
           <Route path="structure" element={<Structure />} />
           <Route path="needs" element={<NeedsYou />} />
+          <Route path="issues" element={<IssuesPage />} />
           <Route path="parts" element={<Navigate to="../structure" replace />} />
           <Route path="n/:nid" element={<NodeLayout />}>
             <Route index element={<NodeOverview />} />
@@ -145,6 +148,7 @@ export function App() {
             <Route path="decisions" element={<Collection kind="decision" />} />
             <Route path="docs" element={<Collection kind="doc" />} />
             <Route path="debt" element={<Collection kind="debt" />} />
+            <Route path="issues" element={<IssuesPage />} />
           </Route>
           <Route path="features" element={<FeaturesPage />} />
           <Route path="features/new" element={<FeatureWizard />} />

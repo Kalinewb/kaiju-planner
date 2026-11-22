@@ -9,6 +9,7 @@ import { api } from './api.ts';
 import { Button, Card, Drawer, Empty, PageHeader, Progress, StatusBadge, TypeBadge, cx, useAsync } from './ui.tsx';
 import { EntityEditor } from './EntityEditor.tsx';
 import { StatusControl } from './status.tsx';
+import { ReportIssueButton } from './issues.tsx';
 import { useProject } from './App.tsx';
 import { ScopeContext } from './scope.tsx';
 
@@ -16,7 +17,8 @@ function useStructureData(pid: string) {
   const parts = useAsync(() => api.list({ project: pid, kind: 'part' }), [pid]);
   const feats = useAsync(() => api.list({ project: pid, kind: 'feature' }), [pid]);
   const tasks = useAsync(() => api.list({ project: pid, kind: 'task' }), [pid]);
-  return { parts, feats, tasks, loaded: !!(parts.data && feats.data && tasks.data), P: parts.data ?? [], F: feats.data ?? [], T: tasks.data ?? [], reload: () => { parts.reload(); feats.reload(); tasks.reload(); } };
+  const issues = useAsync(() => api.list({ project: pid, kind: 'issue' }), [pid]);
+  return { parts, feats, tasks, loaded: !!(parts.data && feats.data && tasks.data && issues.data), P: parts.data ?? [], F: feats.data ?? [], T: tasks.data ?? [], I: issues.data ?? [], reload: () => { parts.reload(); feats.reload(); tasks.reload(); issues.reload(); } };
 }
 
 /** Add or edit a component in a side drawer. */
@@ -247,6 +249,7 @@ export function NodeLayout() {
   const inScope = (partId: string) => scope.ids.has(partId);
   const nF = d.F.filter((f) => f.status !== 'Rejected' && inScope(f.data.part_id)).length;
   const nT = d.T.filter((t) => inScope(t.data.part_id || d.F.find((f) => f.id === t.data.feature_id)?.data.part_id || '')).length;
+  const nI = d.I.filter((i) => ['Open', 'Confirmed', 'In progress'].includes(i.status) && inScope(i.data.part_id || d.F.find((f) => f.id === i.data.feature_id)?.data.part_id || '')).length;
   const tab = (to: string, label: string, count?: number) => (
     <NavLink key={to} to={`${scope.base}${to}`} end={to === ''} className={({ isActive }) => cx('whitespace-nowrap border-b-2 px-3 py-2 text-sm', isActive ? 'border-accent font-medium text-accent' : 'border-transparent text-muted hover:text-fg')}>
       {label}{count !== undefined && <span className="ml-1 text-xs text-muted">{count}</span>}
@@ -260,12 +263,13 @@ export function NodeLayout() {
       <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-center gap-2"><h1 className="text-xl font-semibold tracking-tight">{node.title}</h1><TypeBadge type={node.data.type} /></div>
         <div className="flex flex-wrap items-center gap-3">
+          <ReportIssueButton partId={node.id} onDone={() => d.reload()} />
           <label className="flex items-center gap-1.5 text-sm"><input type="checkbox" className="!w-auto" checked={inside} onChange={(e) => setInsidePersist(e.target.checked)} /> Include everything inside it</label>
           <StatusControl entity={node} label={false} onChanged={() => d.reload()} />
         </div>
       </div>
       <div className="mb-5 flex overflow-x-auto border-b border-line" role="tablist">
-        {tab('', 'Overview')}{tab('/features', 'Features', nF)}{tab('/tasks', 'Tasks', nT)}{tab('/roadmap', 'Roadmap')}{tab('/decisions', 'Decisions')}{tab('/docs', 'Docs')}{tab('/debt', 'Debt')}
+        {tab('', 'Overview')}{tab('/features', 'Features', nF)}{tab('/issues', 'Issues', nI)}{tab('/tasks', 'Tasks', nT)}{tab('/roadmap', 'Roadmap')}{tab('/decisions', 'Decisions')}{tab('/docs', 'Docs')}{tab('/debt', 'Debt')}
       </div>
       <Outlet context={{ ...ctx, node, parts: d.P, features: d.F, tasks: d.T, reloadStructure: d.reload }} />
     </ScopeContext.Provider>

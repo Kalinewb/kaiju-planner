@@ -8,7 +8,7 @@ import { Button, Card, Confirm, Empty, PageHeader, StatusBadge, fmtDate, useAsyn
 import { EntityEditor } from './EntityEditor.tsx';
 import { useProject } from './App.tsx';
 import { useScope } from './scope.tsx';
-import { StatusControl } from './status.tsx';
+import { ReportIssueButton } from './issues.tsx';
 
 export function FeaturesPage() {
   const { project } = useProject();
@@ -114,7 +114,7 @@ export function FeatureDetail() {
   return (
     <>
       <PageHeader title={e.title || 'Untitled feature'} help={e.data.origin ? `Started in: ${e.data.origin}` : undefined}
-        actions={<Link to={`${scope.base}/features`}><Button variant="ghost">← All features</Button></Link>} />
+        actions={<><ReportIssueButton partId={e.data.part_id ?? ''} featureId={e.id} label="Report an issue with this" /><Link to={`${scope.base}/features`}><Button variant="ghost">← All features</Button></Link></>} />
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="space-y-4 lg:col-span-2">
           <Card>

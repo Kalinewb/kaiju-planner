@@ -45,6 +45,14 @@ export const PART_STATUSES = ['Not started', 'Planned', 'In development', 'Testi
 export const PHASE_STATUSES = ['Not started', 'In progress', 'Completed', 'On hold'];
 export const PROJECT_STATUSES = ['Defining', 'Planning', 'In development', 'Testing', 'Live', 'On hold', 'Archived'];
 export const DECISION_STATUSES = ['Not decided', 'Proposed', 'Approved', 'Rejected', 'Superseded'];
+export const ISSUE_STATUSES = ['Open', 'Confirmed', 'In progress', 'Fixed (needs retest)', 'Verified', "Won't fix", 'Duplicate'];
+export const ISSUE_OPEN = ['Open', 'Confirmed', 'In progress'];
+export const ISSUE_RETEST = ['Fixed (needs retest)'];
+export const ISSUE_CLOSED = ['Verified', "Won't fix", 'Duplicate'];
+/** Only the owner can sign these off. Claude may report, comment and say "fixed, please retest". */
+export const ISSUE_OWNER_ONLY = ['Verified', "Won't fix"];
+export const ISSUE_TYPES = ['Bug', 'Visual / UX', 'Performance', 'Docs', 'Question', 'Idea'];
+export const SEVERITIES = ['Not set', 'Low', 'Medium', 'High', 'Blocker'];
 export const DEBT_STATUSES = ['Open', 'Planned', 'Resolved', 'Dismissed'];
 export const DOC_SECTIONS = [
   'General', 'How the application is structured', 'Technical setup', 'Data storage', 'Integrations',
@@ -186,6 +194,23 @@ export const KINDS: Record<string, KindDef> = {
       r('feature_id', 'Related feature', 'feature'),
     ],
   },
+  issue: {
+    kind: 'issue', label: 'Issue', plural: 'Issues', titleField: 'name', approvable: false,
+    help: 'Something wrong, found while testing or using the project: what is wrong, how to see it, and a suggested fix. Claude can read these when you ask.',
+    statuses: ISSUE_STATUSES,
+    fields: [
+      t('name', 'Short title', 'One line, for example "Eject leaves monitors off".'),
+      r('part_id', 'Which component?', 'part'),
+      r('feature_id', 'Which feature? (optional)', 'feature'),
+      s('type', 'What kind of problem?', ISSUE_TYPES),
+      s('severity', 'How bad is it?', SEVERITIES),
+      l('problem', 'What is wrong?', 'Describe what you saw.'),
+      l('fix', 'Suggested fix', 'Your idea, or leave empty and ask Claude for one. Claude\'s suggestions are labelled.'),
+      l('steps', 'How to see it', 'Steps to reproduce, one per line.'),
+      l('expected', 'What you expected instead'),
+      t('found_in', 'Found in version or commit'),
+    ],
+  },
   brief: {
     kind: 'brief', label: 'Implementation brief', plural: 'Implementation briefs', titleField: 'name', approvable: true,
     help: 'Instructions for Claude Code, built from approved information only.',
@@ -200,6 +225,7 @@ const ADVANCED: Record<string, string[]> = {
   feature: ['original_input', 'problem', 'users', 'behavior', 'expected_result', 'complexity', 'must_not_change', 'testing_plan', 'docs_notes', 'technical_notes'],
   task: ['acceptance', 'technical_notes'],
   decision: ['pros_cons', 'consequences', 'decided_on'],
+  issue: ['steps', 'expected', 'found_in'],
 };
 for (const [kind, keys] of Object.entries(ADVANCED)) for (const f of KINDS[kind].fields) if (keys.includes(f.key)) f.advanced = true;
 

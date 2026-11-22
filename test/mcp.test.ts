@@ -51,6 +51,15 @@ test('MCP server: handshake, tool list, dry run then import, and the owner-only 
     assert.ok(!ok.err); // Claude's own draft can be extended
     const bad = await tool(8, 'kaiju_update_item', { id: mine.id, data: { name: 'Renamed' } });
     assert.ok(bad.err); assert.match(bad.text, /cannot overwrite/);
+    const added = JSON.parse((await tool(12, 'kaiju_add_item', { project_id: real.project_id, kind: 'issue', data: { name: 'Login crashes', problem: 'Crash on empty password', severity: 'High' } })).text);
+    assert.equal(added.status, 'Open');
+    const listed = JSON.parse((await tool(13, 'kaiju_list_issues', { project_id: real.project_id, status: 'open' })).text);
+    assert.equal(listed.length, 1); assert.equal(listed[0].title, 'Login crashes'); assert.equal(listed[0].severity, 'High');
+    const fix = await tool(14, 'kaiju_update_item', { id: added.id, data: { fix: 'Check for an empty value first.' } });
+    assert.ok(!fix.err);
+    const one = JSON.parse((await tool(15, 'kaiju_get_issue', { id: added.id })).text);
+    assert.match(one.markdown, /AI suggestion, not an instruction/);
+    assert.match((JSON.parse((await tool(16, 'kaiju_issues_brief', { project_id: real.project_id })).text)).markdown, /## Login crashes/);
     const refused = await tool(11, 'kaiju_set_status', { id: proj.features[0].id, status: 'Under review', note: 'ready for you' });
     assert.ok(refused.err); assert.match(refused.text, /cannot do that/); // this token only has the drafts power
     assert.ok(names.includes('kaiju_set_status') && names.includes('kaiju_add_comment'));

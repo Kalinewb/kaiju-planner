@@ -8,7 +8,7 @@ import type { Store } from './store.ts';
 const ACTOR = 'Claude Code (import)';
 const SECTIONS: { key: string; kind: string }[] = [
   { key: 'parts', kind: 'part' }, { key: 'features', kind: 'feature' }, { key: 'phases', kind: 'phase' },
-  { key: 'decisions', kind: 'decision' }, { key: 'docs', kind: 'doc' }, { key: 'debt', kind: 'debt' }, { key: 'tasks', kind: 'task' },
+  { key: 'decisions', kind: 'decision' }, { key: 'docs', kind: 'doc' }, { key: 'debt', kind: 'debt' }, { key: 'issues', kind: 'issue' }, { key: 'tasks', kind: 'task' },
 ];
 const MAX_ITEMS = 500;
 const HINT_TARGET: Record<string, string> = { feature: 'technical_notes', task: 'technical_notes', part: 'notes' };

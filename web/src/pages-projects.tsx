@@ -118,6 +118,8 @@ export function ProjectDashboard() {
   const feats = useAsync(() => api.list({ project: project.id, kind: 'feature' }), [project.id]);
   const tasks = useAsync(() => api.list({ project: project.id, kind: 'task' }), [project.id]);
   const parts = useAsync(() => api.list({ project: project.id, kind: 'part' }), [project.id]);
+  const issuesList = useAsync(() => api.list({ project: project.id, kind: 'issue' }), [project.id]);
+  const issuesOpen = (issuesList.data ?? []).filter((i) => ['Open', 'Confirmed', 'In progress'].includes(i.status)).length;
   const s = sum.data;
   if (!s) return <p className="text-muted">Loading…</p>;
   const today = new Date().toISOString().slice(0, 10);
@@ -135,7 +137,7 @@ export function ProjectDashboard() {
       {project.approved && hasUnapprovedChanges(project) && <div className="mb-4 rounded-lg bg-warn-soft px-3 py-2 text-warn">The project definition has edits you have not approved. <Link className="underline" to={`/p/${project.id}/definition`}>Review them</Link></div>}
       <Card className="mb-4"><div className="mb-1 flex justify-between"><span className="font-medium">Overall progress</span><span>{s.progress}%</span></div><Progress value={s.progress} />
         <div className="mt-1 text-xs text-muted">{s.tasksTotal ? `Based on ${s.tasksTotal} task(s)` : 'No tasks yet, so this is based on completed features.'}</div></Card>
-      <p className="mb-4 text-sm text-muted">{s.parts} component{s.parts === 1 ? '' : 's'} · {s.features} feature{s.features === 1 ? '' : 's'} ({s.featuresCompleted} completed, {s.featuresInDevelopment} in development, {s.featuresPlanned} approved or planned, {s.featuresIdeas} still ideas) · {s.tasksOpen} open task{s.tasksOpen === 1 ? '' : 's'}</p>
+      <p className="mb-4 text-sm text-muted">{s.parts} component{s.parts === 1 ? '' : 's'} · {s.features} feature{s.features === 1 ? '' : 's'} ({s.featuresCompleted} completed, {s.featuresInDevelopment} in development, {s.featuresPlanned} approved or planned, {s.featuresIdeas} still ideas) · {s.tasksOpen} open task{s.tasksOpen === 1 ? '' : 's'} · <Link className="text-accent" to={`/p/${project.id}/issues`}>{issuesOpen} open issue{issuesOpen === 1 ? '' : 's'}</Link></p>
       {parts.data && parts.data.length > 0 && (
         <Card className="mb-4">
           <div className="mb-2 flex items-center justify-between"><h2 className="font-semibold">Structure</h2><Link className="text-sm text-accent" to={`/p/${project.id}/structure`}>Open full structure</Link></div>
