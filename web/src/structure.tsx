@@ -234,6 +234,7 @@ export function NodeLayout() {
   const { nid } = useParams();
   const d = useStructureData(project.id);
   const [inside, setInside] = useState(readInside);
+  const [editing, setEditing] = useState(false);
   const setInsidePersist = (v: boolean) => { setInside(v); try { localStorage.setItem('kaiju-include-inside', v ? '1' : '0'); } catch { /* ignore */ } };
   const node = d.P.find((p) => p.id === nid);
   const base = `/p/${project.id}`;
@@ -263,6 +264,7 @@ export function NodeLayout() {
       <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-center gap-2"><h1 className="text-xl font-semibold tracking-tight">{node.title}</h1><TypeBadge type={node.data.type} /></div>
         <div className="flex flex-wrap items-center gap-3">
+          <Button variant="primary" onClick={() => setEditing(true)}>✎ Edit</Button>
           <ReportIssueButton partId={node.id} onDone={() => d.reload()} />
           <label className="flex items-center gap-1.5 text-sm"><input type="checkbox" className="!w-auto" checked={inside} onChange={(e) => setInsidePersist(e.target.checked)} /> Include everything inside it</label>
           <StatusControl entity={node} label={false} onChanged={() => d.reload()} />
@@ -272,6 +274,7 @@ export function NodeLayout() {
         {tab('', 'Overview')}{tab('/features', 'Features', nF)}{tab('/issues', 'Issues', nI)}{tab('/tasks', 'Tasks', nT)}{tab('/roadmap', 'Roadmap')}{tab('/decisions', 'Decisions')}{tab('/docs', 'Docs')}{tab('/debt', 'Debt')}
       </div>
       <Outlet context={{ ...ctx, node, parts: d.P, features: d.F, tasks: d.T, reloadStructure: d.reload }} />
+      {editing && <ComponentDrawer pid={project.id} parts={d.P} target={node} onClose={() => setEditing(false)} onDone={() => { setEditing(false); d.reload(); }} />}
     </ScopeContext.Provider>
   );
 }
@@ -302,7 +305,7 @@ export function NodeOverview() {
           <div className="flex flex-wrap gap-2">{quick.map((t) => <Button key={t} onClick={() => setDrawer({ initial: { parent_id: node.id, type: t } })}>+ {t}</Button>)}<Button variant="ghost" onClick={() => setDrawer({ initial: { parent_id: node.id } })}>+ Other</Button></div>
         </Card>
         <Card>
-          <div className="mb-2 flex items-center justify-between"><h2 className="font-semibold">About</h2><Button variant="ghost" onClick={() => setDrawer(node)}>Edit details</Button></div>
+          <div className="mb-2 flex items-center justify-between"><h2 className="font-semibold">About</h2><Button onClick={() => setDrawer(node)}>✎ Edit details</Button></div>
           {details.length === 0 ? <p className="text-sm text-muted">Not described yet.</p> : <dl className="space-y-2 text-sm">{details.map((f) => <div key={f.key}><dt className="text-xs font-medium uppercase text-muted">{f.label}</dt><dd className="whitespace-pre-wrap">{node.data[f.key]}</dd></div>)}</dl>}
         </Card>
         <Card className="lg:col-span-2">
