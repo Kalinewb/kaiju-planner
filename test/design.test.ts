@@ -10,7 +10,7 @@ import type { El } from '../shared/uikit.ts';
 test('the element catalog matches the UI kit and flags what the kit lacks', () => {
   const kit = ELEMENTS.filter((e) => e.kit).map((e) => e.kit).sort();
   assert.deepEqual(kit, ['UBack', 'UButton', 'UConfirmSheet', 'UEmpty', 'UField', 'UNotice', 'UPick', 'URing', 'URow', 'USection', 'USegmented', 'UStepper', 'USwitch', 'UTip', 'UToast']);
-  assert.deepEqual(ELEMENTS.filter((e) => !e.kit).map((e) => e.type).sort(), ['card', 'custom', 'indicator', 'level', 'number', 'person', 'slider', 'steps', 'tiles']);
+  assert.deepEqual(ELEMENTS.filter((e) => !e.kit).map((e) => e.type).sort(), ['custom', 'level', 'number', 'slider']);
   // every gap that exists in the owner's plugins says where it was found
   for (const e of ELEMENTS.filter((x) => !x.kit && !['custom', 'slider'].includes(x.type))) assert.ok(e.seenIn?.length, e.type);
   assert.ok(ICONS.length >= 24 && new Set(ICONS.map((i) => i.name)).size === ICONS.length);
@@ -28,11 +28,13 @@ test('stored elements are validated in plain language', () => {
 });
 
 test('the written spec names kit components, keeps placeholders honest, and lists gaps', () => {
-  const mode = newEl('selector'); mode.props = { label: 'Listening mode', options: 'Off, Noise Cancellation, Transparency', selected: '2', icon: 'headphones' };
+  const mode = newEl('selector'); mode.props = { label: 'Listening mode', options: 'Off, Noise Cancellation, Transparency', selected: '2' };
+  const pod = newEl('row'); pod.props = { ...pod.props, label: 'Left pod', value: '87%', icon: 'battery' };
   const noise = newEl('slider'); noise.props = { label: 'Noise level', min: '0', max: '100', value: '50', icon: '' };
-  const spec = buildDesignSpec('AirPods', [{ name: 'Main', elements: [newEl('section'), mode, noise] }, { name: 'Settings', elements: [] }]);
+  const spec = buildDesignSpec('AirPods', [{ name: 'Main', elements: [newEl('section'), pod, mode, noise] }, { name: 'Settings', elements: [] }]);
   assert.match(spec.markdown, /# UI design: AirPods/); assert.match(spec.markdown, /## Page 1: Main/); assert.match(spec.markdown, /## Page 2: Settings/);
-  assert.match(spec.markdown, /\*\*USegmented\*\* \(Selector \(one of several\)\) "Listening mode".*choices: Off \| Noise Cancellation \| Transparency.*icon: headphones \(placeholder\)/);
+  assert.match(spec.markdown, /\*\*URow \(stacked\) \+ USegmented\*\* \(Selector \(one of several\)\) "Listening mode".*choices: Off \| Noise Cancellation \| Transparency/);
+  assert.match(spec.markdown, /\*\*URow\*\* \(Row\) "Left pod".*value: 87%.*icon: battery \(placeholder\)/);
   assert.match(spec.markdown, /\*\*NOT IN THE KIT\*\* \(Slider\) "Noise level"/);
   assert.match(spec.markdown, /## Gaps in the UI kit[\s\S]*\*\*Slider\*\* is used 1 time/);
   assert.deepEqual(spec.gaps.map((g) => g.element), ['Slider']);
