@@ -4,12 +4,15 @@ import { openDb } from '../server/db.ts';
 import { Store } from '../server/store.ts';
 import { Auth, LoginLimiter } from '../server/auth.ts';
 import { createApp } from '../server/app.ts';
-import { ELEMENTS, ICONS, buildDesignSpec, newEl, parseElements } from '../shared/uikit.ts';
+import { ELEMENTS, ICONS, buildDesignSpec, conditionText, isShown, newEl, parseElements } from '../shared/uikit.ts';
+import type { El } from '../shared/uikit.ts';
 
 test('the element catalog matches the UI kit and flags what the kit lacks', () => {
   const kit = ELEMENTS.filter((e) => e.kit).map((e) => e.kit).sort();
-  assert.deepEqual(kit, ['UButton', 'UEmpty', 'UField', 'UNotice', 'UPick', 'URing', 'URow', 'USection', 'USegmented', 'UStepper', 'USwitch', 'UTip']);
-  assert.deepEqual(ELEMENTS.filter((e) => !e.kit).map((e) => e.type).sort(), ['custom', 'slider']);
+  assert.deepEqual(kit, ['UBack', 'UButton', 'UConfirmSheet', 'UEmpty', 'UField', 'UNotice', 'UPick', 'URing', 'URow', 'USection', 'USegmented', 'UStepper', 'USwitch', 'UTip', 'UToast']);
+  assert.deepEqual(ELEMENTS.filter((e) => !e.kit).map((e) => e.type).sort(), ['card', 'custom', 'indicator', 'level', 'number', 'person', 'slider', 'steps', 'tiles']);
+  // every gap that exists in the owner's plugins says where it was found
+  for (const e of ELEMENTS.filter((x) => !x.kit && !['custom', 'slider'].includes(x.type))) assert.ok(e.seenIn?.length, e.type);
   assert.ok(ICONS.length >= 24 && new Set(ICONS.map((i) => i.name)).size === ICONS.length);
 });
 
@@ -61,4 +64,39 @@ test('pages are stored per component, invalid elements are refused, autosaves st
   // moving a component's pages around: deleting the component clears its pages' link
   await owner('DELETE', `/api/entities/${part.id}?force=1`);
   assert.equal((await owner('GET', `/api/entities/${page.id}`)).json.entity.data.part_id, '');
+});
+
+const withCond = (mode: El, noise: El, op: string, val: string): El[] => [mode, { ...noise, props: { ...noise.props, if_el: mode.id, if_op: op, if_val: val } }];
+
+test('an element can be shown only if an earlier element has a value (the AirPods adaptive noise level case)', () => {
+  const mode = newEl('selector'); mode.props.label = 'Listening mode'; mode.props.options = 'Off, Noise Cancellation, Transparency, Adaptive';
+  const noise = newEl('slider'); noise.props.label = 'Adaptive noise level';
+  const els = withCond(mode, noise, 'is', 'Adaptive');
+  const at = (n: number) => (el: El, key: string) => (el.id === mode.id && key === 'selected' ? String(n) : el.props[key] ?? '');
+  assert.equal(isShown(els[1], els, at(2)), false); // Noise Cancellation
+  assert.equal(isShown(els[1], els, at(4)), true);  // Adaptive
+  assert.equal(isShown(els[0], els, at(1)), true);  // no condition: always shown
+  assert.equal(isShown({ ...els[1], props: { ...els[1].props, if_op: 'is not' } }, els, at(4)), false);
+  assert.match(conditionText(els[1], els), /"Listening mode" is "Adaptive"/);
+  const spec = buildDesignSpec('AirPods', [{ name: 'Main', elements: els }]);
+  assert.match(spec.markdown, /Shown only if "Listening mode" is "Adaptive"\./);
+});
+
+test('conditions on switches and numbers work, and invalid ones are dropped when stored', () => {
+  const sw = newEl('switch'); sw.props.label = 'Conversation Awareness'; sw.props.on = 'true';
+  const step = newEl('stepper'); step.props.label = 'Level'; step.props.value = '7';
+  const a = newEl('tip'); a.props.if_el = sw.id; a.props.if_op = 'is on';
+  const b = newEl('tip'); b.props.if_el = step.id; b.props.if_op = 'is at least'; b.props.if_val = '8';
+  const get = (el: El, key: string) => el.props[key] ?? '';
+  assert.equal(isShown(a, [sw, step, a, b], get), true); assert.equal(isShown(b, [sw, step, a, b], get), false);
+  // stored: a condition that points at a later element, a missing element, or a wrong operator is removed
+  const later = newEl('tip'); later.props.if_el = 'zzz'; later.props.if_op = 'is on';
+  const early = newEl('tip'); early.props.if_el = sw.id; early.props.if_op = 'is on';
+  const wrongOp = newEl('tip'); wrongOp.props.if_el = sw.id; wrongOp.props.if_op = 'is at least'; wrongOp.props.if_val = '3';
+  const stored = parseElements(JSON.stringify([early, sw, later, wrongOp]));
+  assert.equal(stored[0].props.if_el, undefined);            // early points at an element that comes after it
+  assert.equal(stored[2].props.if_el, undefined);            // unknown element
+  const ok = parseElements(JSON.stringify([sw, { ...early, props: { ...early.props } }]));
+  assert.equal(ok[1].props.if_el, sw.id);                    // valid: earlier element, right operator
+  assert.equal(parseElements(JSON.stringify([sw, wrongOp]))[1].props.if_el, undefined);
 });

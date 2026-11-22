@@ -8,6 +8,7 @@ export interface ElementDef {
   kit: string | null;   // the omarchy-ui component, or null when the kit has no such element
   keys?: string;        // keyboard behaviour from the kit docs
   help: string; props: Prop[];
+  seenIn?: string[];    // where this was found in the owner's plugins (file names, from a survey)
 }
 
 const label: Prop = { key: 'label', label: 'Label', type: 'text', def: 'Label' };
@@ -26,9 +27,28 @@ export const ELEMENTS: ElementDef[] = [
   { type: 'notice', label: 'Notice', group: 'Feedback', kit: 'UNotice', help: 'A message that stays until it is dealt with.', props: [{ key: 'text', label: 'Text', type: 'text', def: 'Something to know.' }, { key: 'tone', label: 'Tone', type: 'select', options: ['info', 'warning'], def: 'info' }] },
   { type: 'empty', label: 'Empty state', group: 'Feedback', kit: 'UEmpty', help: 'What to show when there is nothing yet.', props: [{ key: 'text', label: 'Text', type: 'text', def: 'Nothing here yet.' }, icon] },
   { type: 'ring', label: 'Progress ring', group: 'Feedback', kit: 'URing', help: 'A circular progress or level.', props: [label, { key: 'value', label: 'Value (0 to 100)', type: 'number', def: '60' }] },
+  { type: 'header', label: 'Page header (back and close)', group: 'Layout', kit: 'UBack', keys: 'Esc goes back one level, then closes', help: 'The one back control and the one close control (UBack, UClose).', props: [{ key: 'title', label: 'Title', type: 'text', def: 'Title' }, { key: 'back', label: 'Show back', type: 'bool', def: 'true' }, { key: 'close', label: 'Show close', type: 'bool', def: 'true' }] },
+  { type: 'toast', label: 'Toast', group: 'Feedback', kit: 'UToast', help: 'A short message that appears and goes away by itself.', props: [{ key: 'text', label: 'Text', type: 'text', def: 'Saved.' }, icon] },
+  { type: 'confirm', label: 'Confirm sheet', group: 'Feedback', kit: 'UConfirmSheet', keys: 'Enter confirms a non-destructive sheet, Esc cancels', help: 'Asks before something that cannot be undone.', props: [{ key: 'text', label: 'Question', type: 'text', def: 'Are you sure?' }, { key: 'yes', label: 'Confirm button', type: 'text', def: 'Confirm' }, { key: 'no', label: 'Cancel button', type: 'text', def: 'Cancel' }, { key: 'danger', label: 'Destructive', type: 'bool', def: 'false' }] },
   { type: 'slider', label: 'Slider', group: 'Not in the kit yet', kit: null, help: 'A draggable value. The kit has no slider yet, so this is a gap to fix.', props: [label, { key: 'min', label: 'Minimum', type: 'number', def: '0' }, { key: 'max', label: 'Maximum', type: 'number', def: '100' }, { key: 'value', label: 'Value', type: 'number', def: '50' }, icon] },
+  { type: 'level', label: 'Level bar', group: 'Not in the kit yet', kit: null, help: 'A bar showing a level, such as a battery, volume or brightness.', seenIn: ['omarchy-notch/NotchOsd.qml (volume, brightness)', 'AirPods battery (third-party plugin)'], props: [label, { key: 'value', label: 'Value (0 to 100)', type: 'number', def: '70' }, icon] },
+  { type: 'card', label: 'Card', group: 'Not in the kit yet', kit: null, help: 'A framed block with a title and some text.', seenIn: ['omarchy-face/RecordCard.qml', 'omarchy-face/DotCard.qml', 'omarchy-face/IndicatorCard.qml', 'omarchy-face/TestCard.qml'], props: [{ key: 'title', label: 'Title', type: 'text', def: 'Card' }, { key: 'body', label: 'Text', type: 'text', def: '' }, icon] },
+  { type: 'person', label: 'List row with avatar', group: 'Not in the kit yet', kit: null, help: 'A row with a round picture or initial, a name and a detail, as in a list of people.', seenIn: ['omarchy-face/PeopleView.qml', 'omarchy-face/PersonView.qml'], props: [label, { key: 'hint', label: 'Detail', type: 'text', def: '' }, icon, { key: 'clickable', label: 'Clickable', type: 'bool', def: 'true' }] },
+  { type: 'indicator', label: 'Status indicator', group: 'Not in the kit yet', kit: null, help: 'A small dot or glance showing a state at a glance.', seenIn: ['omarchy-notch/Glance.qml', 'omarchy-notch/ActivityGlance.qml', 'omarchy-face/Indicator.qml', 'omarchy-egpu/views/Glance.qml'], props: [label, { key: 'state', label: 'State', type: 'select', options: ['ok', 'busy', 'warning', 'off'], def: 'ok' }] },
+  { type: 'steps', label: 'Step flow', group: 'Not in the kit yet', kit: null, help: 'A row of numbered steps with the current one marked.', seenIn: ['omarchy-egpu/views/EjectFlow.qml'], props: [label, { key: 'steps', label: 'Steps (comma separated)', type: 'options', def: 'Prepare, Run, Done' }, { key: 'current', label: 'Current step (1, 2, 3...)', type: 'number', def: '1' }] },
+  { type: 'tiles', label: 'Tile grid', group: 'Not in the kit yet', kit: null, help: 'Square tiles in a grid, one of which can be chosen.', seenIn: ['omarchy-profiles/extras/Workspaces.qml'], props: [label, { key: 'tiles', label: 'Tiles (comma separated)', type: 'options', def: 'One, Two, Three, Four' }, { key: 'selected', label: 'Chosen (1, 2, 3...)', type: 'number', def: '1' }] },
+  { type: 'number', label: 'Number field', group: 'Not in the kit yet', kit: null, help: 'A box you type a number into. The kit has a stepper, but the notch uses its own number field.', seenIn: ['omarchy-notch/NotchNumberField.qml'], props: [label, { key: 'value', label: 'Value', type: 'number', def: '0' }] },
   { type: 'custom', label: 'Custom element', group: 'Not in the kit yet', kit: null, help: 'Anything else (for example a battery indicator). Describe it so it can be turned into a kit component.', props: [label, { key: 'description', label: 'What it should look like and do', type: 'text', def: '' }, icon] },
 ];
+
+/** Reserved properties on every element: "show only if" another element, earlier on the page, has a value. */
+export const COND_KEYS = ['if_el', 'if_op', 'if_val'] as const;
+export const COND_OPS_BY_TYPE: Record<string, string[]> = {
+  switch: ['is on', 'is off'], selector: ['is', 'is not'], dropdown: ['is', 'is not'],
+  stepper: ['is at least', 'is at most'], slider: ['is at least', 'is at most'], level: ['is at least', 'is at most'], ring: ['is at least', 'is at most'], number: ['is at least', 'is at most'],
+};
+
+export const splitOptions = (s: string | undefined) => (s ?? '').split(',').map((x) => x.trim()).filter(Boolean);
 
 export const ELEMENT_BY_TYPE: Record<string, ElementDef> = Object.fromEntries(ELEMENTS.map((e) => [e.type, e]));
 
@@ -55,7 +75,7 @@ export function parseElements(json: string | undefined): El[] {
   try { v = JSON.parse(json); } catch { throw new Error('The elements are not valid JSON.'); }
   if (!Array.isArray(v)) throw new Error('The elements must be a list.');
   if (v.length > 200) throw new Error('A page can have at most 200 elements.');
-  return v.map((raw, i) => {
+  const list = v.map((raw, i) => {
     const e = raw as { id?: unknown; type?: unknown; props?: unknown };
     const def = typeof e?.type === 'string' ? ELEMENT_BY_TYPE[e.type] : undefined;
     if (!def) throw new Error(`Element ${i + 1}: unknown type "${String((e as any)?.type)}".`);
@@ -66,11 +86,52 @@ export function parseElements(json: string | undefined): El[] {
       if (typeof val !== 'string' || val.length > 500) throw new Error(`Element ${i + 1}: "${p.label}" must be text of at most 500 characters.`);
       props[p.key] = val;
     }
+    for (const k of COND_KEYS) { const val = (e.props as Record<string, unknown> | undefined)?.[k]; if (typeof val === 'string' && val) props[k] = val.slice(0, 200); }
     return { id: typeof e.id === 'string' && e.id ? e.id.slice(0, 20) : Math.random().toString(36).slice(2, 9), type: def.type, props };
+  });
+  return cleanConditions(list);
+}
+
+/** A condition may only look at an element that comes earlier on the page, and the operator has to suit that element. */
+export function cleanConditions(all: El[]): El[] {
+  return all.map((el, i) => {
+    const src = el.props.if_el ? all.slice(0, i).find((x) => x.id === el.props.if_el) : undefined;
+    if (!src || !(COND_OPS_BY_TYPE[src.type] ?? []).includes(el.props.if_op ?? '')) { const { if_el, if_op, if_val, ...rest } = el.props; void if_el; void if_op; void if_val; return { ...el, props: rest }; }
+    return el;
   });
 }
 
-export const splitOptions = (s: string | undefined) => (s ?? '').split(',').map((x) => x.trim()).filter(Boolean);
+/** The current value of an element as a string, for conditions. */
+export function elementValue(el: El, get: (el: El, key: string) => string): string {
+  const p = (k: string) => get(el, k);
+  switch (el.type) {
+    case 'switch': return p('on') === 'true' ? 'on' : 'off';
+    case 'selector': case 'dropdown': return splitOptions(el.props.options)[(Number(p('selected')) || 1) - 1] ?? '';
+    default: return p('value');
+  }
+}
+
+/** Is this element shown right now, given the current values of the elements before it? */
+export function isShown(el: El, all: El[], get: (el: El, key: string) => string): boolean {
+  if (!el.props.if_el) return true;
+  const src = all.find((x) => x.id === el.props.if_el);
+  if (!src) return true;
+  const v = elementValue(src, get); const want = el.props.if_val ?? '';
+  switch (el.props.if_op) {
+    case 'is on': return v === 'on'; case 'is off': return v === 'off';
+    case 'is': return v.toLowerCase() === want.toLowerCase(); case 'is not': return v.toLowerCase() !== want.toLowerCase();
+    case 'is at least': return Number(v) >= Number(want); case 'is at most': return Number(v) <= Number(want);
+    default: return true;
+  }
+}
+
+export function conditionText(el: El, all: El[]): string {
+  const src = all.find((x) => x.id === el.props.if_el);
+  if (!src || !el.props.if_op) return '';
+  const name = src.props.label || src.props.title || ELEMENT_BY_TYPE[src.type].label;
+  return `"${name}" ${el.props.if_op}${/is (on|off)/.test(el.props.if_op) ? '' : ` "${el.props.if_val ?? ''}"`}`;
+}
+
 
 export interface DesignPage { name: string; elements: El[] }
 
@@ -96,8 +157,9 @@ export function buildDesignSpec(component: string, pages: DesignPage[]): { markd
         else bits.push(`${prop.key}: ${v}`);
       }
       const name = def.kit ?? 'NOT IN THE KIT';
+      const cond = conditionText(el, pg.elements);
       const main = p.label || p.title || p.text || '';
-      out.push(`${i + 1}. **${name}** (${def.label})${main ? ` "${main}"` : ''}${bits.length ? `: ${bits.join(', ')}` : ''}${def.keys ? `. Keys: ${def.keys}.` : ''}`);
+      out.push(`${i + 1}. **${name}** (${def.label})${main ? ` "${main}"` : ''}${bits.length ? `: ${bits.join(', ')}` : ''}${def.keys ? `. Keys: ${def.keys}.` : ''}${cond ? ` Shown only if ${cond}.` : ''}`);
       if (!def.kit) gaps.set(def.label, [...(gaps.get(def.label) ?? []), `${pg.name} #${i + 1}${p.label ? ` "${p.label}"` : ''}`]);
     });
     out.push('');
@@ -105,7 +167,7 @@ export function buildDesignSpec(component: string, pages: DesignPage[]): { markd
   const gapList = [...gaps.entries()].map(([element, where]) => ({ element, where }));
   if (gapList.length) {
     out.push('## Gaps in the UI kit\n');
-    for (const g of gapList) out.push(`- **${g.element}** is used ${g.where.length} time${g.where.length === 1 ? '' : 's'} (${g.where.join('; ')}) and does not exist in omarchy-ui yet.`);
+    for (const g of gapList) { const seen = ELEMENTS.find((e) => e.label === g.element)?.seenIn; out.push(`- **${g.element}** is used ${g.where.length} time${g.where.length === 1 ? '' : 's'} (${g.where.join('; ')}) and does not exist in omarchy-ui yet.${seen?.length ? ` Already built by hand in: ${seen.join(', ')}.` : ''}`); }
     out.push('');
   }
   return { markdown: out.join('\n'), gaps: gapList };
