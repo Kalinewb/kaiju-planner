@@ -175,7 +175,7 @@ export class Store {
       throw new HttpError(409, 'Use "Approve" to approve a brief.');
   }
 
-  setStatus(id: string, status: string, confirmed = false, actor = 'You'): Entity {
+  setStatus(id: string, status: string, confirmed = false, actor = 'You', note = ''): Entity {
     const e = this.get(id);
     const def = KINDS[e.kind];
     if (e.kind === 'feature' || e.kind === 'decision' || e.kind === 'brief') this.checkStatusAllowed(e.kind, status, !!e.approved);
@@ -184,7 +184,8 @@ export class Store {
       throw new HttpError(409, 'Marking something as completed needs your confirmation.', { needsConfirmation: true });
     if (e.status === status) return e;
     this.db.prepare('UPDATE entities SET status=?, updated_at=? WHERE id=?').run(status, now(), id);
-    this.log(e.project_id ?? id, id, e.kind, status === 'Completed' ? 'completed' : 'status', `${def.label} "${e.title}": ${e.status || '(none)'} → ${status}`, actor);
+    this.log(e.project_id ?? id, id, e.kind, status === 'Completed' ? 'completed' : 'status', `${def.label} "${e.title}": ${e.status || '(none)'} → ${status}${note ? ` (reason: ${note})` : ''}`, actor);
+    if (note) this.addComment(id, `Status ${e.status || '(none)'} → ${status}. Reason: ${note}`, actor);
     return this.get(id);
   }
 
@@ -233,6 +234,7 @@ export class Store {
         tx.prepare('DELETE FROM entities WHERE project_id = ?').run(id);
         tx.prepare('DELETE FROM links WHERE project_id = ?').run(id);
         tx.prepare('DELETE FROM ai_messages WHERE project_id = ?').run(id);
+        tx.prepare('DELETE FROM comments WHERE project_id = ?').run(id);
       } else {
         for (const ref of refs) {
           const o = this.get(ref.id);
@@ -242,11 +244,38 @@ export class Store {
         }
         tx.prepare('DELETE FROM links WHERE from_id = ? OR to_id = ?').run(id, id);
         tx.prepare('DELETE FROM revisions WHERE entity_id = ?').run(id);
+        tx.prepare('DELETE FROM comments WHERE entity_id = ?').run(id);
       }
       tx.prepare('DELETE FROM entities WHERE id = ?').run(id);
       tx.exec('COMMIT');
     } catch (err) { tx.exec('ROLLBACK'); throw err; }
     this.log(e.project_id ?? id, null, e.kind, 'deleted', `Deleted ${KINDS[e.kind].label.toLowerCase()} "${e.title}"`, actor, e.data);
+  }
+
+  // ---------- comments ----------
+  addComment(entity_id: string, body: string, author = 'You') {
+    const e = this.get(entity_id);
+    const text = body.trim();
+    if (!text) throw new HttpError(400, 'Write something first.');
+    if (text.length > 4000) throw new HttpError(400, 'Comments can be at most 4000 characters.');
+    const pid = e.kind === 'project' ? e.id : e.project_id!;
+    const id = randomUUID(); const at = now();
+    this.db.prepare('INSERT INTO comments (id,entity_id,project_id,author,body,at) VALUES (?,?,?,?,?,?)').run(id, entity_id, pid, author, text, at);
+    this.log(pid, entity_id, e.kind, 'commented', `${author} commented on ${KINDS[e.kind].label.toLowerCase()} "${e.title}"`, author);
+    return { id, entity_id, project_id: pid, author, body: text, at };
+  }
+  comments(entity_id: string) {
+    return this.db.prepare('SELECT * FROM comments WHERE entity_id = ? ORDER BY at, rowid').all(entity_id) as { id: string; entity_id: string; project_id: string; author: string; body: string; at: string }[];
+  }
+  removeComment(id: string) {
+    const r = this.db.prepare('SELECT * FROM comments WHERE id = ?').get(id) as Row | undefined;
+    if (!r) throw new HttpError(404, 'Not found');
+    this.db.prepare('DELETE FROM comments WHERE id = ?').run(id);
+    this.log(r.project_id, r.entity_id, null, 'comment removed', `Removed a comment by ${r.author}`);
+  }
+  commentCounts(project_id: string): Record<string, number> {
+    const rows = this.db.prepare('SELECT entity_id, COUNT(*) AS n FROM comments WHERE project_id = ? GROUP BY entity_id').all(project_id) as { entity_id: string; n: number }[];
+    return Object.fromEntries(rows.map((r) => [r.entity_id, r.n]));
   }
 
   // ---------- links ----------
@@ -371,6 +400,7 @@ export class Store {
       revisions: [...eids].flatMap((id) => this.revisions(id).map((r: any) => ({ ...r, entity_id: id }))),
       links: ids.flatMap((pid) => this.links(pid)),
       history: ids.flatMap((pid) => this.history(pid, 100000)),
+      comments: ids.flatMap((pid) => this.db.prepare('SELECT entity_id, project_id, author, body, at FROM comments WHERE project_id = ?').all(pid)),
     };
   }
 
@@ -400,6 +430,7 @@ export class Store {
       }
       for (const r of file.revisions ?? []) this.db.prepare('INSERT INTO revisions (id,entity_id,approved_at,data) VALUES (?,?,?,?)').run(randomUUID(), m(r.entity_id), r.approved_at, J(r.data));
       for (const l of file.links ?? []) this.db.prepare('INSERT INTO links (id,project_id,from_id,to_id,type,confirmed,source,note,created_at) VALUES (?,?,?,?,?,?,?,?,?)').run(randomUUID(), m(l.project_id), m(l.from_id), m(l.to_id), l.type, l.confirmed ? 1 : 0, l.source, l.note ?? '', l.created_at);
+      for (const c of file.comments ?? []) this.db.prepare('INSERT INTO comments (id,entity_id,project_id,author,body,at) VALUES (?,?,?,?,?,?)').run(randomUUID(), m(c.entity_id), m(c.project_id), c.author, c.body, c.at);
       for (const h of file.history ?? []) this.db.prepare('INSERT INTO history (id,project_id,entity_id,kind,action,summary,actor,at,before,after) VALUES (?,?,?,?,?,?,?,?,?,?)').run(randomUUID(), m(h.project_id), m(h.entity_id), h.kind, h.action, h.summary, h.actor, h.at, h.before ? J(h.before) : null, h.after ? J(h.after) : null);
       this.db.exec('COMMIT');
       const projects = file.entities.filter((e: any) => e.kind === 'project').map((e: any) => m(e.id));

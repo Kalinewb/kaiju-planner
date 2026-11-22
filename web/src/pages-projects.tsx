@@ -7,6 +7,7 @@ import type { Summary } from './api.ts';
 import { Button, Card, Empty, PageHeader, Progress, StatusBadge, fmtDate, useAsync } from './ui.tsx';
 import { EntityEditor } from './EntityEditor.tsx';
 import { useProject } from './App.tsx';
+import { StatusControl } from './status.tsx';
 import { buildTree, nodeStats } from '../../shared/tree.ts';
 import { TypeBadge } from './ui.tsx';
 
@@ -129,7 +130,7 @@ export function ProjectDashboard() {
   return (
     <>
       <PageHeader title={project.title} help={project.data.vision || project.data.description || 'No description yet. Add one in Project Definition.'}
-        actions={<select aria-label="Development stage" className="!w-auto" value={project.status} onChange={async (e) => { await api.setStatus(project.id, e.target.value); reload(); }}>{PROJECT_STATUSES.map((x) => <option key={x}>{x}</option>)}</select>} />
+        actions={<StatusControl entity={project} label={false} onChanged={() => reload()} />} />
       {!project.approved && <div className="mb-4 rounded-lg bg-warn-soft px-3 py-2 text-warn">The project definition has not been approved yet. <Link className="underline" to={`/p/${project.id}/definition`}>Review it</Link></div>}
       {project.approved && hasUnapprovedChanges(project) && <div className="mb-4 rounded-lg bg-warn-soft px-3 py-2 text-warn">The project definition has edits you have not approved. <Link className="underline" to={`/p/${project.id}/definition`}>Review them</Link></div>}
       <Card className="mb-4"><div className="mb-1 flex justify-between"><span className="font-medium">Overall progress</span><span>{s.progress}%</span></div><Progress value={s.progress} />

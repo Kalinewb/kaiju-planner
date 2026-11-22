@@ -8,6 +8,7 @@ import type { TreeNode } from '../../shared/tree.ts';
 import { api } from './api.ts';
 import { Button, Card, Drawer, Empty, PageHeader, Progress, StatusBadge, TypeBadge, cx, useAsync } from './ui.tsx';
 import { EntityEditor } from './EntityEditor.tsx';
+import { StatusControl } from './status.tsx';
 import { useProject } from './App.tsx';
 import { ScopeContext } from './scope.tsx';
 
@@ -260,7 +261,7 @@ export function NodeLayout() {
         <div className="flex items-center gap-2"><h1 className="text-xl font-semibold tracking-tight">{node.title}</h1><TypeBadge type={node.data.type} /></div>
         <div className="flex flex-wrap items-center gap-3">
           <label className="flex items-center gap-1.5 text-sm"><input type="checkbox" className="!w-auto" checked={inside} onChange={(e) => setInsidePersist(e.target.checked)} /> Include everything inside it</label>
-          <select aria-label="Status" className="!w-auto" value={node.status} onChange={async (e) => { try { await api.setStatus(node.id, e.target.value); d.reload(); } catch { /* confirmation needed for Completed is handled below */ if (e.target.value === 'Completed' && confirm('Mark this component as completed? Please confirm it is really finished.')) { await api.setStatus(node.id, 'Completed', true); d.reload(); } } }}>{PART_STATUSES.map((s) => <option key={s}>{s}</option>)}</select>
+          <StatusControl entity={node} label={false} onChanged={() => d.reload()} />
         </div>
       </div>
       <div className="mb-5 flex overflow-x-auto border-b border-line" role="tablist">

@@ -77,25 +77,29 @@ export class LoginLimiter {
 }
 
 /** Access tokens for Claude Code. Only a hash is stored, so a token is shown once and cannot be read back. */
+/** drafts: read and add drafts. manager: also change statuses (with a reason) and add comments. Neither can approve, delete or touch settings. */
+export const TOKEN_SCOPES = ['drafts', 'manager'];
+
 export class ApiTokens {
   db: DatabaseSync;
   constructor(db: DatabaseSync) { this.db = db; }
   private h(t: string) { return createHash('sha256').update(t).digest('hex'); }
-  create(name: string): { id: string; token: string } {
+  create(name: string, scope: string = 'drafts'): { id: string; token: string; scope: string } {
     const n = name.trim().slice(0, 60);
     if (!n) throw new Error('Give the token a name.');
+    if (!TOKEN_SCOPES.includes(scope)) throw new Error('Unknown token power level.');
     const token = 'kpt_' + randomBytes(32).toString('base64url');
     const id = randomBytes(8).toString('hex');
-    this.db.prepare('INSERT INTO api_tokens (id,name,token_hash,created_at) VALUES (?,?,?,?)').run(id, n, this.h(token), new Date().toISOString());
-    return { id, token };
+    this.db.prepare('INSERT INTO api_tokens (id,name,token_hash,created_at,scope) VALUES (?,?,?,?,?)').run(id, n, this.h(token), new Date().toISOString(), scope);
+    return { id, token, scope };
   }
-  verify(token: string): { id: string; name: string } | null {
+  verify(token: string): { id: string; name: string; scope: string } | null {
     if (!/^kpt_[A-Za-z0-9_-]{20,}$/.test(token)) return null;
-    const r = this.db.prepare('SELECT id, name FROM api_tokens WHERE token_hash=?').get(this.h(token)) as { id: string; name: string } | undefined;
+    const r = this.db.prepare('SELECT id, name, scope FROM api_tokens WHERE token_hash=?').get(this.h(token)) as { id: string; name: string; scope: string } | undefined;
     if (!r) return null;
     this.db.prepare('UPDATE api_tokens SET last_used=? WHERE id=?').run(new Date().toISOString(), r.id);
     return r;
   }
-  list() { return this.db.prepare('SELECT id, name, created_at, last_used FROM api_tokens ORDER BY created_at').all(); }
+  list() { return this.db.prepare('SELECT id, name, scope, created_at, last_used FROM api_tokens ORDER BY created_at').all(); }
   revoke(id: string) { this.db.prepare('DELETE FROM api_tokens WHERE id=?').run(id); }
 }

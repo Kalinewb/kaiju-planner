@@ -10,7 +10,8 @@ const VERSION = '1.0.0';
 
 const INSTRUCTIONS = `You are connected to the product owner's Kaiju Planner.
 RULES (the planner enforces them, and you must follow them in spirit too):
-- Everything you write becomes an UNAPPROVED DRAFT labelled as written by Claude. You cannot approve, complete, delete, change statuses or change settings. Only the owner can, in the app. Never tell the owner something is approved or done because you added it.
+- Everything you write becomes an UNAPPROVED DRAFT labelled as written by Claude. You can never approve, delete or change settings. Changing a status (including Completed) and commenting work only if the owner gave this token the "manager" power. Without it those tools are refused.
+- Mark something Completed only when you have seen evidence (a merged commit, a passing check, the owner's word) and put that evidence in the note. Never mark something approved or done just because you added it.
 - Do not invent. Import only what you can verify from the owner's material. Leave a field out rather than guessing. If something is unclear, ask the owner.
 - Never overwrite text the owner wrote. The planner will refuse. Existing records with the same name are skipped, not changed.
 - For existing work, put the real-world state in "status_hint" (it is recorded as an unverified note, not applied).
@@ -33,6 +34,9 @@ const TOOLS = [
   tool('kaiju_add_item', 'Adds ONE draft record (part, feature, task, phase, decision, doc, debt) to a project. Prefer kaiju_bulk_import for several.', { project_id: { type: 'string' }, kind: { type: 'string', enum: ['part', 'feature', 'task', 'phase', 'decision', 'doc', 'debt'] }, data: { type: 'object' } }, ['project_id', 'kind', 'data']),
   tool('kaiju_update_item', 'Fills empty fields or fields Claude wrote earlier on a draft. Refused for approved items and for text the owner wrote.', { id: { type: 'string' }, data: { type: 'object' } }, ['id', 'data']),
   tool('kaiju_suggest_link', 'Suggests that two features are related or one needs the other. Saved as a POSSIBLE relationship for the owner to confirm.', { project_id: { type: 'string' }, from_id: { type: 'string' }, to_id: { type: 'string' }, type: { type: 'string', enum: ['depends_on', 'related'] }, reason: { type: 'string' } }, ['project_id', 'from_id', 'to_id', 'type', 'reason']),
+  tool('kaiju_set_status', 'Changes the status of a feature, task, component, phase, decision or debt item (including Completed). Needs a token with the manager power. A short evidence-based "note" is required and is kept as a comment. Statuses that need approval (Approved, Planned, In development, Testing, Completed for features) cannot be set on features the owner has not approved.', { id: { type: 'string' }, status: { type: 'string' }, note: { type: 'string', description: 'Why: the evidence for this status, at least 3 characters.' } }, ['id', 'status', 'note']),
+  tool('kaiju_add_comment', 'Adds a comment to any item. Needs a token with the manager power. Use it for findings, questions for the owner and progress notes. It never edits the owner\'s text.', { id: { type: 'string' }, body: { type: 'string' } }, ['id', 'body']),
+  tool('kaiju_get_comments', 'Reads the comments on an item.', { id: { type: 'string' } }, ['id']),
   tool('kaiju_get_brief', 'Builds the implementation brief for a feature or task (approved information only, with "Questions Before Implementation"). Read-only. Use it as the instructions for coding work, and ask the owner about every open question.', { id: { type: 'string' } }, ['id']),
 ];
 
@@ -75,6 +79,9 @@ async function call(name: string, a: any): Promise<unknown> {
     case 'kaiju_add_item': return slim(await api('POST', '/api/entities', { kind: a.kind, project_id: a.project_id, data: a.data }));
     case 'kaiju_update_item': return slim(await api('PATCH', `/api/entities/${encodeURIComponent(a.id)}`, { data: a.data }));
     case 'kaiju_suggest_link': return api('POST', '/api/links', { project_id: a.project_id, from_id: a.from_id, to_id: a.to_id, type: a.type, note: a.reason });
+    case 'kaiju_set_status': return slim(await api('POST', `/api/entities/${encodeURIComponent(a.id)}/status`, { status: a.status, note: a.note }));
+    case 'kaiju_add_comment': return api('POST', `/api/entities/${encodeURIComponent(a.id)}/comments`, { body: a.body });
+    case 'kaiju_get_comments': return api('GET', `/api/entities/${encodeURIComponent(a.id)}/comments`);
     case 'kaiju_get_brief': return api('GET', `/api/entities/${encodeURIComponent(a.id)}/brief`);
     default: throw new Error(`Unknown tool ${name}`);
   }

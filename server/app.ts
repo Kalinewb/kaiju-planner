@@ -31,7 +31,7 @@ export function createApp(o: AppOptions) {
   const { store, auth } = o;
   const limiter = o.limiter ?? new LoginLimiter();
   const tokens = new ApiTokens(store.db);
-  const app = new Hono<{ Variables: { principal: 'owner' | 'claude' } }>();
+  const app = new Hono<{ Variables: { principal: 'owner' | 'claude'; scope: string } }>();
 
   const socketIp = (c: Context<any>): string => {
     try { return (getConnInfo(c).remote.address ?? 'unknown').replace(/^::ffff:/, ''); } catch { return 'unknown'; }
@@ -115,13 +115,15 @@ export function createApp(o: AppOptions) {
       if (!isHttps(c) && !isPrivateIp(ip)) return c.json({ error: 'Tokens are only accepted over HTTPS when you are not on your home network.' }, 403);
       const wait = limiter.retryAfter(ip);
       if (wait) return c.json({ error: 'Too many bad attempts. Try again later.' }, 429);
-      if (!tokens.verify(authz.slice(7).trim())) { limiter.fail(ip); return c.json({ error: 'Invalid or revoked token.' }, 401); }
+      const tok = tokens.verify(authz.slice(7).trim());
+      if (!tok) { limiter.fail(ip); return c.json({ error: 'Invalid or revoked token.' }, 401); }
       const m = c.req.method; const path = c.req.path;
       const allowed = (m === 'GET' && !/^\/api\/(auth|ai|tokens)(\/|$)/.test(path))
         || (m === 'POST' && (path === '/api/entities' || path === '/api/links' || path === '/api/bulk'))
-        || (m === 'PATCH' && /^\/api\/entities\/[^/]+$/.test(path));
+        || (m === 'PATCH' && /^\/api\/entities\/[^/]+$/.test(path))
+        || (tok.scope === 'manager' && m === 'POST' && /^\/api\/entities\/[^/]+\/(status|comments)$/.test(path));
       if (!allowed) return c.json({ error: 'This token cannot do that. Approving, completing, deleting and settings can only be done by you in the app.' }, 403);
-      c.set('principal', 'claude');
+      c.set('principal', 'claude'); c.set('scope', tok.scope);
       return next();
     }
     if (!auth.validSession(getCookie(c, COOKIE))) return c.json({ error: 'Please log in.' }, 401);
@@ -171,8 +173,21 @@ export function createApp(o: AppOptions) {
   });
   app.post('/api/entities/:id/status', async (c) => {
     const b = await c.req.json();
+    if (c.get('principal') === 'claude') {
+      // The owner gave this token the power to change statuses, but every change needs a stated reason.
+      const note = typeof b.note === 'string' ? b.note.trim() : '';
+      if (note.length < 3) throw new HttpError(400, 'Say why in "note" (at least 3 characters). Every status change by Claude needs a reason.');
+      return c.json(store.setStatus(c.req.param('id'), b.status, true, 'Claude Code', note.slice(0, 1000)));
+    }
     return c.json(store.setStatus(c.req.param('id'), b.status, b.confirmed === true));
   });
+  app.get('/api/entities/:id/comments', (c) => { store.get(c.req.param('id')); return c.json(store.comments(c.req.param('id'))); });
+  app.post('/api/entities/:id/comments', async (c) => {
+    const b = await c.req.json().catch(() => ({}));
+    return c.json(store.addComment(c.req.param('id'), String(b.body ?? ''), c.get('principal') === 'claude' ? 'Claude Code' : 'You'), 201);
+  });
+  app.delete('/api/comments/:id', (c) => { store.removeComment(c.req.param('id')); return c.json({ ok: true }); });
+  app.get('/api/projects/:id/comment-counts', (c) => c.json(store.commentCounts(c.req.param('id'))));
   app.post('/api/entities/:id/approve', (c) => c.json(store.approve(c.req.param('id'))));
   app.delete('/api/entities/:id', (c) => { store.remove(c.req.param('id'), c.req.query('force') === '1'); return c.json({ ok: true }); });
   app.post('/api/reorder', async (c) => { const b = await c.req.json(); store.reorder(b.ids); return c.json({ ok: true }); });
@@ -210,7 +225,7 @@ export function createApp(o: AppOptions) {
   app.get('/api/tokens', (c) => c.json(tokens.list()));
   app.post('/api/tokens', async (c) => {
     const b = await c.req.json().catch(() => ({}));
-    try { return c.json(tokens.create(String(b.name ?? '')), 201); } catch (e) { throw new HttpError(400, (e as Error).message); }
+    try { return c.json(tokens.create(String(b.name ?? ''), String(b.scope ?? 'drafts')), 201); } catch (e) { throw new HttpError(400, (e as Error).message); }
   });
   app.delete('/api/tokens/:id', (c) => { tokens.revoke(c.req.param('id')); return c.json({ ok: true }); });
   app.post('/api/links/:id/confirm', (c) => { store.confirmLink(c.req.param('id')); return c.json({ ok: true }); });

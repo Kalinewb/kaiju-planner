@@ -51,6 +51,9 @@ test('MCP server: handshake, tool list, dry run then import, and the owner-only 
     assert.ok(!ok.err); // Claude's own draft can be extended
     const bad = await tool(8, 'kaiju_update_item', { id: mine.id, data: { name: 'Renamed' } });
     assert.ok(bad.err); assert.match(bad.text, /cannot overwrite/);
+    const refused = await tool(11, 'kaiju_set_status', { id: proj.features[0].id, status: 'Under review', note: 'ready for you' });
+    assert.ok(refused.err); assert.match(refused.text, /cannot do that/); // this token only has the drafts power
+    assert.ok(names.includes('kaiju_set_status') && names.includes('kaiju_add_comment'));
     assert.equal((await rpc(9, 'nope')).error.code, -32601);
   } finally { child.kill(); server.close(); }
 });

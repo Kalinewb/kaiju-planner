@@ -34,7 +34,8 @@ export interface AiStatus { hasKey: boolean; keyHint: string; enabled: boolean; 
 export interface Proposal { kind: 'feature'; data: Record<string, string>; part_id: string; user_said: string; unclear_fields: string[]; open_questions: string[]; my_suggestions: string[] }
 export interface LinkSuggestion { from_id: string; to_id: string; type: string; reason: string }
 
-export interface TokenInfo { id: string; name: string; created_at: string; last_used: string | null }
+export interface TokenInfo { id: string; name: string; scope: string; created_at: string; last_used: string | null }
+export interface CommentRow { id: string; entity_id: string; author: string; body: string; at: string }
 
 export interface AttentionItem { id: string; kind: string; title: string; status: string; why: string; part_id: string }
 export interface Attention { decide: AttentionItem[]; drafts: AttentionItem[]; count: number }
@@ -43,7 +44,10 @@ export const api = {
   attention: (pid: string) => req<Attention>('GET', `/projects/${pid}/attention`),
   approveMany: (pid: string, ids: string[]) => req<{ approved: number; ids: string[]; skipped: { id: string; title: string; reason: string }[] }>('POST', `/projects/${pid}/approve-many`, { ids }),
   tokens: () => req<TokenInfo[]>('GET', '/tokens'),
-  createToken: (name: string) => req<{ id: string; token: string }>('POST', '/tokens', { name }),
+  createToken: (name: string, scope = 'drafts') => req<{ id: string; token: string; scope: string }>('POST', '/tokens', { name, scope }),
+  comments: (id: string) => req<CommentRow[]>('GET', `/entities/${id}/comments`),
+  addComment: (id: string, body: string) => req<CommentRow>('POST', `/entities/${id}/comments`, { body }),
+  removeComment: (id: string) => req('DELETE', `/comments/${id}`),
   revokeToken: (id: string) => req('DELETE', `/tokens/${id}`),
   aiStatus: () => req<AiStatus>('GET', '/ai/status'),
   aiSettings: (b: { apiKey?: string; enabled?: boolean; model?: string }) => req<AiStatus>('POST', '/ai/settings', b),

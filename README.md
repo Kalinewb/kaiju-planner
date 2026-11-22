@@ -66,10 +66,15 @@ claude mcp add kaiju-planner \
 
 **Tools Claude gets:** `kaiju_get_schema`, `kaiju_list_projects`, `kaiju_get_project`, `kaiju_bulk_import` (with `dry_run`), `kaiju_add_item`, `kaiju_update_item`, `kaiju_suggest_link`, `kaiju_get_brief`. The brief tool also lets Claude Code fetch the approved instructions for a feature and work from them.
 
+**Two power levels** (chosen when you create the token; existing tokens stay draft-only):
+
+- **Drafts only:** reads everything and adds drafts.
+- **Manager:** also changes statuses, **including Completed**, and adds comments (`kaiju_set_status`, `kaiju_add_comment`, `kaiju_get_comments`). Every status change needs a written reason (at least 3 characters). It shows as *Claude Code* in the change history and stays visible as a comment on the item. The rules about approval still apply: Claude cannot set Approved, Planned, In development, Testing or Completed on a feature you have not approved.
+
 **What a token can and cannot do** (enforced by the server, not by trust):
 
 - It can read everything and add drafts. Everything it adds is **unapproved**, status "Proposed" for features, labelled *AI suggestion* with the author shown as Claude Code in the change history, and it never fills your "original words".
-- It **cannot** approve, complete, change a status, delete, confirm a relationship, create briefs, import export files, or touch settings, passwords, the AI key or tokens. Those are only possible when you are logged in.
+- It **cannot** approve, delete, confirm a relationship, create briefs, import export files, or touch settings, passwords, the AI key or tokens, whatever its power level. Those are only possible when you are logged in. A drafts-only token also cannot change a status or comment.
 - It **cannot overwrite** text you wrote or touch anything you approved. It can fill empty fields and extend its own drafts. Records with the same name are **skipped, not changed**.
 - Real-world status ("half built") goes in as an unverified note, never as the status itself. Tasks, and roadmap entries, can only attach to features you have approved, so those are reported as *skipped* and can be imported after you approve.
 - A dry run changes nothing. A real import is all-or-nothing, with at most 500 items per call.

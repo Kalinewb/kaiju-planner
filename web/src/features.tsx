@@ -8,6 +8,7 @@ import { Button, Card, Confirm, Empty, PageHeader, StatusBadge, fmtDate, useAsyn
 import { EntityEditor } from './EntityEditor.tsx';
 import { useProject } from './App.tsx';
 import { useScope } from './scope.tsx';
+import { StatusControl } from './status.tsx';
 
 export function FeaturesPage() {
   const { project } = useProject();
@@ -117,13 +118,7 @@ export function FeatureDetail() {
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="space-y-4 lg:col-span-2">
           <Card>
-            <div className="mb-4 flex flex-wrap items-center gap-2">
-              <label htmlFor="status" className="font-medium">Status</label>
-              <select id="status" className="!w-auto" value={e.status} onChange={(ev) => setStatus(ev.target.value)}>
-                {FEATURE_STATUSES.map((s) => <option key={s} value={s} disabled={FEATURE_NEEDS_APPROVAL.includes(s) && !e.approved}>{s}{FEATURE_NEEDS_APPROVAL.includes(s) && !e.approved ? ' (needs approval first)' : ''}</option>)}
-              </select>
-              {!e.approved && <span className="text-sm text-warn">Not approved yet. Press Approve below when the details are right.</span>}
-            </div>
+            {!e.approved && <p className="mb-3 text-sm text-warn">Not approved yet. Press Approve below when the details are right.</p>}
             {err && <div role="alert" className="mb-3 text-bad">{err}</div>}
             <EntityEditor key={e.updated_at} entity={e} kind="feature" options={{ part: parts.data ?? [] }} onSaved={() => f.reload()} onDeleted={() => nav(`${scope.base}/features`)} />
           </Card>

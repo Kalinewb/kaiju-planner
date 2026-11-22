@@ -133,15 +133,20 @@ export function GlobalRoadmaps() {
 
 function TokenSettings() {
   const t = useAsync(() => api.tokens(), []);
-  const [name, setName] = useState('Claude Code'); const [fresh, setFresh] = useState<string | null>(null); const [err, setErr] = useState(''); const [copied, setCopied] = useState(false);
+  const [name, setName] = useState('Claude Code'); const [scope, setScope] = useState('drafts'); const [fresh, setFresh] = useState<string | null>(null); const [err, setErr] = useState(''); const [copied, setCopied] = useState(false);
   const cmd = fresh ? `claude mcp add kaiju-planner --env KAIJU_URL=${location.origin} --env KAIJU_TOKEN=${fresh} -- node /path/to/kaiju-planner/mcp/server.ts` : '';
   return (
     <Card className="lg:col-span-2"><h2 className="mb-1 font-semibold">Claude Code access (import and manage from your computer)</h2>
       <p className="mb-3 text-sm text-muted">Lets Claude Code on your computer read your projects and <strong>add drafts</strong>, for example to import projects you already have. It can never approve, complete, delete or change settings. Everything it adds is unapproved and labelled as written by Claude. It never overwrites text you wrote. The repository's <code>mcp/server.ts</code> connects Claude Code to this planner using a token.</p>
-      <form className="mb-3 flex flex-wrap gap-2" onSubmit={async (e) => { e.preventDefault(); setErr(''); try { const r = await api.createToken(name); setFresh(r.token); setCopied(false); t.reload(); } catch (x) { setErr((x as Error).message); } }}>
+      <form className="mb-3 flex flex-wrap gap-2" onSubmit={async (e) => { e.preventDefault(); setErr(''); try { const r = await api.createToken(name, scope); setFresh(r.token); setCopied(false); t.reload(); } catch (x) { setErr((x as Error).message); } }}>
         <input aria-label="Token name" className="max-w-xs" value={name} onChange={(e) => setName(e.target.value)} placeholder="Name, e.g. Laptop" />
+        <select aria-label="What this token may do" className="max-w-sm" value={scope} onChange={(e) => setScope(e.target.value)}>
+          <option value="drafts">Read and add drafts only</option>
+          <option value="manager">Also change statuses (incl. completed) and comment</option>
+        </select>
         <Button variant="primary" disabled={!name.trim()}>Create token</Button>
       </form>
+      {scope === 'manager' && <p className="mb-3 rounded-lg bg-warn-soft px-3 py-2 text-sm text-warn">With this power Claude can mark things completed. Every change needs a stated reason, shows as Claude Code in the history, and is kept as a comment on the item. It still cannot approve, delete, or touch settings, passwords, keys or tokens.</p>}
       {err && <div role="alert" className="mb-2 text-bad">{err}</div>}
       {fresh && (
         <div className="mb-3 rounded-lg bg-warn-soft p-3 text-sm">
@@ -151,7 +156,7 @@ function TokenSettings() {
         </div>)}
       {t.data && t.data.length > 0 && (
         <ul className="divide-y divide-line text-sm">{t.data.map((x) => (
-          <li key={x.id} className="flex flex-wrap items-center justify-between gap-2 py-2"><span><strong>{x.name}</strong> <span className="text-muted">created {fmtDate(x.created_at)} · {x.last_used ? `last used ${fmtDate(x.last_used)}` : 'never used'}</span></span>
+          <li key={x.id} className="flex flex-wrap items-center justify-between gap-2 py-2"><span><strong>{x.name}</strong> <span className={x.scope === 'manager' ? 'rounded bg-warn-soft px-1.5 text-xs text-warn' : 'rounded bg-sunken px-1.5 text-xs text-muted'}>{x.scope === 'manager' ? 'can change status and comment' : 'drafts only'}</span> <span className="text-muted">created {fmtDate(x.created_at)} · {x.last_used ? `last used ${fmtDate(x.last_used)}` : 'never used'}</span></span>
             <Button variant="danger" onClick={async () => { await api.revokeToken(x.id); t.reload(); }}>Revoke</Button></li>))}</ul>)}
       {t.data?.length === 0 && !fresh && <p className="text-sm text-muted">No tokens yet.</p>}
     </Card>

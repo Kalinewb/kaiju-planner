@@ -3,7 +3,9 @@ import { KINDS, fieldCategory, hasUnapprovedChanges } from '../../shared/schema.
 import { descendantIds, pathTo } from '../../shared/tree.ts';
 import type { Entity } from '../../shared/schema.ts';
 import { api, ApiError } from './api.ts';
-import { Button, CategoryBadge, Confirm, cx, StatusBadge, fmtDate } from './ui.tsx';
+import { Button, CategoryBadge, Confirm, cx, fmtDate } from './ui.tsx';
+import { StatusControl } from './status.tsx';
+import { Comments } from './comments.tsx';
 
 interface Props {
   entity?: Entity;           // existing record; omit to create
@@ -131,6 +133,7 @@ export function EntityEditor({ entity, kind, projectId, options = {}, initial, h
           You have changes that are not approved yet. The approved version ({fmtDate(entity.approved_at)}) is unchanged until you approve these edits.
         </div>
       )}
+      {entity && def.statuses && <StatusControl entity={entity} onChanged={(e) => onSaved(e)} />}
       {essential.map((f) => <div key={f.key}>{renderField(f)}</div>)}
       {advanced.length > 0 && (
         <details open={advancedHasContent} className="rounded-lg border border-line p-3">
@@ -147,8 +150,8 @@ export function EntityEditor({ entity, kind, projectId, options = {}, initial, h
         {onCancel && <Button type="button" variant="ghost" onClick={onCancel}>Cancel</Button>}
         {extraActions}
         {entity && <Button type="button" variant="danger" className="ml-auto" onClick={() => setAskDelete({ references: [] })}>Delete</Button>}
-        {entity && <span className="ml-2 text-xs text-muted">{entity.status && <StatusBadge status={entity.status} />}</span>}
       </div>
+      {entity && <Comments entityId={entity.id} />}
 
       {askApprove && entity && (
         <Confirm title={`Approve this ${def.label.toLowerCase()}?`} confirmLabel="Yes, approve"

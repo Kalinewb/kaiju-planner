@@ -71,8 +71,20 @@ export function openDb(path: string): DatabaseSync {
       created_at TEXT NOT NULL,
       last_used TEXT
     );
+    CREATE TABLE IF NOT EXISTS comments (
+      id TEXT PRIMARY KEY,
+      entity_id TEXT NOT NULL,
+      project_id TEXT NOT NULL,
+      author TEXT NOT NULL,
+      body TEXT NOT NULL,
+      at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_comments_entity ON comments(entity_id, at);
     CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS sessions (token_hash TEXT PRIMARY KEY, expires_at INTEGER NOT NULL);
   `);
+  // Older databases: tokens gain a power level. Existing tokens stay draft-only.
+  const cols = db.prepare('PRAGMA table_info(api_tokens)').all() as { name: string }[];
+  if (!cols.some((c) => c.name === 'scope')) db.exec("ALTER TABLE api_tokens ADD COLUMN scope TEXT NOT NULL DEFAULT 'drafts'");
   return db;
 }
