@@ -6,10 +6,11 @@ import { Auth, LoginLimiter } from '../server/auth.ts';
 import { createApp } from '../server/app.ts';
 import { ELEMENTS, ICONS, buildDesignSpec, conditionText, isShown, newEl, parseElements } from '../shared/uikit.ts';
 import type { El } from '../shared/uikit.ts';
+import { checksFromDesign } from '../shared/qa.ts';
 
 test('the element catalog matches the UI kit and flags what the kit lacks', () => {
   const kit = ELEMENTS.filter((e) => e.kit).map((e) => e.kit).sort();
-  assert.deepEqual(kit, ['UBack', 'UButton', 'UConfirmSheet', 'UEmpty', 'UField', 'UNotice', 'UPick', 'URing', 'URow', 'USection', 'USegmented', 'UStepper', 'USwitch', 'UTip', 'UToast']);
+  assert.deepEqual(kit, ['UBack', 'UButton', 'UButton', 'UConfirmSheet', 'UEmpty', 'UField', 'UNotice', 'UPick', 'URing', 'URow', 'USection', 'USegmented', 'UStepper', 'USwitch', 'UTip', 'UToast']);
   assert.deepEqual(ELEMENTS.filter((e) => !e.kit).map((e) => e.type).sort(), ['custom', 'level', 'number', 'slider']);
   // every gap that exists in the owner's plugins says where it was found
   for (const e of ELEMENTS.filter((x) => !x.kit && !['custom', 'slider'].includes(x.type))) assert.ok(e.seenIn?.length, e.type);
@@ -101,4 +102,15 @@ test('conditions on switches and numbers work, and invalid ones are dropped when
   const ok = parseElements(JSON.stringify([sw, { ...early, props: { ...early.props } }]));
   assert.equal(ok[1].props.if_el, sw.id);                    // valid: earlier element, right operator
   assert.equal(parseElements(JSON.stringify([sw, wrongOp]))[1].props.if_el, undefined);
+});
+
+test('buttons can sit side by side and open pages; the spec and the QA checks name the pages', () => {
+  const buttons = newEl('buttons'); buttons.props = { ...buttons.props, labels: 'Cancel, Save, Advanced', kinds: 'quiet, primary, link', opens: ',, Settings', align: 'right' };
+  const open = newEl('button'); open.props = { ...open.props, label: 'More', opens: 'page-2' };
+  const spec = buildDesignSpec('AirPods', [{ id: 'page-1', name: 'Main', elements: [buttons, open] }, { id: 'page-2', name: 'Settings', elements: [] }]);
+  assert.match(spec.markdown, /\*\*UButton\*\* \(Button row\).*Cancel \| Save \| Advanced.*opens:/);
+  assert.match(spec.markdown, /when pressed, opens page "Settings"/);
+  const checks = checksFromDesign('Main', [buttons, open], (v) => (v === 'page-2' ? 'Settings' : v));
+  assert.ok(checks.some((c) => /More: does what "More" says and opens "Settings"/.test(c)));
+  assert.ok(checks.some((c) => /each button does what its label says/.test(c)));
 });

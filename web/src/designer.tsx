@@ -7,6 +7,7 @@ import { api } from './api.ts';
 import { Button, Confirm, Empty, cx, useAsync } from './ui.tsx';
 import { useProject } from './App.tsx';
 import { useScope } from './scope.tsx';
+import { removeWithUndo } from './undo.ts';
 
 type Theme = { bg: string; fg: string; sub: string; line: string; row: string; accent: string; warn: string };
 const THEMES: Record<string, Theme> = {
@@ -31,27 +32,31 @@ function Popover({ open, onClose, children, className }: { open: boolean; onClos
 }
 
 // ---------------------------------------------------------------- preview
-function Preview({ els, theme, selected, onSelect, get, set, asUser }: { els: El[]; theme: Theme; selected: string | null; onSelect: (id: string) => void; get: Get; set: (el: El, key: string, v: string) => void; asUser: boolean }) {
+function Preview({ els, theme, selected, onSelect, get, set, asUser, width = 340, height, onOpen, onBack, canGoBack }: { els: El[]; theme: Theme; selected: string | null; onSelect: (id: string) => void; get: Get; set: (el: El, key: string, v: string) => void; asUser: boolean; width?: number; height?: number; onOpen?: (page: string) => void; onBack?: () => void; canGoBack?: boolean }) {
   const t = theme;
   const row: CSSProperties = { display: 'flex', alignItems: 'center', gap: 8, minHeight: 30, padding: '0 10px', fontSize: 12 };
   const btn: CSSProperties = { height: 22, minWidth: 22, border: `1px solid ${t.line}`, background: 'transparent', color: t.fg, borderRadius: 6, cursor: 'pointer', fontSize: 12 };
   const badge = <span style={{ marginLeft: 6, fontSize: 9, fontWeight: 700, color: t.warn, border: `1px solid ${t.warn}`, borderRadius: 4, padding: '0 4px' }}>NOT IN KIT</span>;
   const ic = (el: El) => (el.props.icon ? <span aria-hidden style={{ filter: 'grayscale(1)', opacity: 0.85, width: 18, textAlign: 'center' }}>{iconGlyph(el.props.icon)}</span> : null);
   const stop = (f: () => void) => (e: { stopPropagation: () => void }) => { e.stopPropagation(); f(); };
+  // buttons only act in "Preview as user"; while designing, a click on them just selects them
+  const act = (f: () => void) => (e: { stopPropagation: () => void }) => { if (asUser) { e.stopPropagation(); f(); } };
+  const justify = (a: string) => (a === 'right' ? 'flex-end' : a === 'center' ? 'center' : 'flex-start');
 
   const render = (el: El) => {
     const p = el.props; const g = (k: string) => get(el, k);
     switch (el.type) {
       case 'section': return <div style={{ padding: '12px 10px 4px', fontSize: 10.5, letterSpacing: 0.6, textTransform: 'uppercase', color: t.sub, fontWeight: 600 }}>{p.title}</div>;
-      case 'header': return <div style={{ ...row, justifyContent: 'space-between', fontWeight: 600 }}><span style={{ width: 22, color: t.sub }}>{p.back === 'true' ? '‹' : ''}</span><span>{p.title}</span><span style={{ width: 22, textAlign: 'right', color: t.sub }}>{p.close === 'true' ? '×' : ''}</span></div>;
+      case 'header': return <div style={{ ...row, justifyContent: 'space-between', fontWeight: 600 }}><span style={{ width: 22, color: t.sub, cursor: asUser && canGoBack ? 'pointer' : 'default' }} onClick={act(() => onBack?.())}>{p.back === 'true' ? '‹' : ''}</span><span>{p.title}</span><span style={{ width: 22, textAlign: 'right', color: t.sub }}>{p.close === 'true' ? '×' : ''}</span></div>;
       case 'row': return <div style={{ ...row, minHeight: p.detail ? 40 : 30, borderLeft: p.current === 'true' ? `3px solid ${t.accent}` : '3px solid transparent', fontWeight: p.current === 'true' ? 600 : 400 }}>{ic(el)}<span style={{ flex: 1 }}><span>{p.label}</span>{p.badge && <span style={{ marginLeft: 6, fontSize: 10, border: `1px solid ${t.line}`, borderRadius: 8, padding: '0 6px', color: t.sub, fontWeight: 400 }}>{p.badge}</span>}{p.detail && <div style={{ fontSize: 10.5, color: t.sub, fontWeight: 400 }}>{p.detail}</div>}</span>{p.value && <span style={{ color: t.sub }}>{p.value}</span>}{p.clickable === 'true' && <span style={{ color: t.sub }}>›</span>}</div>;
       case 'switch': { const on = g('on') === 'true'; return <div style={row}>{ic(el)}<span style={{ flex: 1 }}>{p.label}</span><button type="button" aria-pressed={on} aria-label={p.label} onClick={stop(() => set(el, 'on', on ? 'false' : 'true'))} style={{ width: 30, height: 18, borderRadius: 9, background: on ? t.accent : t.line, border: 0, position: 'relative', cursor: 'pointer' }}><span style={{ position: 'absolute', top: 2, left: on ? 14 : 2, width: 14, height: 14, borderRadius: 7, background: '#fff', transition: 'left .15s' }} /></button></div>; }
-      case 'selector': { const opts = splitOptions(p.options); const a = Number(g('selected')) || 1; return <div style={{ padding: '4px 10px 6px' }}><div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, marginBottom: 4 }}>{ic(el)}{p.label}</div><div role="radiogroup" aria-label={p.label} style={{ display: 'flex', border: `1px solid ${t.line}`, borderRadius: 8, overflow: 'hidden' }}>{opts.map((o, i) => <button key={i} type="button" role="radio" aria-checked={a === i + 1} onClick={stop(() => set(el, 'selected', String(i + 1)))} style={{ flex: 1, padding: '6px 4px', fontSize: 12, border: 0, borderLeft: i ? `1px solid ${t.line}` : 0, cursor: 'pointer', background: a === i + 1 ? t.row : 'transparent', color: a === i + 1 ? t.fg : t.sub, fontWeight: a === i + 1 ? 600 : 400, outline: a === i + 1 ? `1px solid ${t.accent}` : 'none', outlineOffset: -1 }}>{o}</button>)}</div></div>; }
+      case 'selector': { const opts = splitOptions(p.options); const a = Number(g('selected')) || 1; return <div style={{ padding: '4px 10px 6px' }}><div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, marginBottom: 4 }}>{ic(el)}{p.label}</div><div role="radiogroup" aria-label={p.label} style={{ display: 'grid', gridAutoFlow: 'column', gridAutoColumns: '1fr', border: `1px solid ${t.line}`, borderRadius: 8, overflow: 'hidden' }}>{opts.map((o, i) => <button key={i} type="button" role="radio" aria-checked={a === i + 1} onClick={stop(() => set(el, 'selected', String(i + 1)))} style={{ padding: '6px 4px', fontSize: 12, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0, border: 0, borderLeft: i ? `1px solid ${t.line}` : 0, cursor: 'pointer', background: a === i + 1 ? t.row : 'transparent', color: a === i + 1 ? t.fg : t.sub, boxShadow: a === i + 1 ? `inset 0 0 0 1px ${t.accent}` : 'none' }}>{o}</button>)}</div></div>; }
       case 'stepper': { const from = Number(p.from) || 0, to = Number(p.to) || 10; const v = Math.min(to, Math.max(from, Number(g('value')) || 0)); const sz = Number(p.step) || 1; const step = (d: number) => set(el, 'value', String(Math.min(to, Math.max(from, v + d * sz)))); return <div style={row}>{ic(el)}<span style={{ flex: 1 }}>{p.label}</span><button type="button" aria-label="Decrease" onClick={stop(() => step(-1))} style={btn}>−</button><span style={{ minWidth: 24, textAlign: 'center' }}>{v}{p.unit}</span><button type="button" aria-label="Increase" onClick={stop(() => step(1))} style={btn}>+</button></div>; }
       case 'dropdown': { const opts = splitOptions(p.options); const a = Math.min(opts.length, Math.max(1, Number(g('selected')) || 1)); return <div style={row}>{ic(el)}<span style={{ flex: 1 }}>{p.label}</span><button type="button" onClick={stop(() => set(el, 'selected', String((a % Math.max(1, opts.length)) + 1)))} style={{ ...btn, padding: '0 8px', minWidth: 90 }}>{opts[a - 1] ?? ''} ▾</button></div>; }
       case 'field': return <div style={{ padding: '4px 10px 6px' }}><div style={{ fontSize: 12, marginBottom: 4 }}>{p.label}</div><input readOnly aria-label={p.label} type={p.secret === 'true' ? 'password' : 'text'} value={p.value} placeholder={p.placeholder} style={{ width: '100%', background: 'transparent', color: t.fg, border: `1px solid ${t.line}`, borderRadius: 8, padding: '6px 8px', fontSize: 12 }} /></div>;
       case 'number': return <div style={row}><span style={{ flex: 1 }}>{p.label}{badge}</span><input readOnly aria-label={p.label} value={g('value') + (p.suffix ? ' ' + p.suffix : '')} style={{ width: 78, textAlign: 'right', background: 'transparent', color: t.fg, border: `1px solid ${t.line}`, borderRadius: 6, padding: '3px 6px', fontSize: 12 }} /></div>;
-      case 'button': { const k = p.kind; const primary = k === 'primary'; const danger = k === 'destructive'; const link = k === 'link'; return <div style={{ padding: '4px 10px' }}><button type="button" aria-label={p.label} onClick={stop(() => {})} style={{ display: 'inline-flex', gap: 6, alignItems: 'center', padding: p.iconOnly === 'true' ? '6px 8px' : '6px 12px', fontSize: 12, borderRadius: 8, cursor: 'pointer', background: primary ? t.row : 'transparent', color: link ? t.accent : danger ? t.warn : t.fg, fontWeight: primary ? 600 : 400, textDecoration: link ? 'underline' : 'none', border: link ? '1px solid transparent' : `1px solid ${primary ? t.accent : t.line}` }}>{ic(el)}{p.iconOnly === 'true' ? (p.icon ? '' : '◻') : p.label}</button></div>; }
+      case 'button': { const k = p.kind; const primary = k === 'primary'; const danger = k === 'destructive'; const link = k === 'link'; const full = p.align === 'full width'; return <div style={{ padding: '4px 10px', display: 'flex', justifyContent: justify(p.align) }}><button type="button" aria-label={p.label} onClick={act(() => p.opens && onOpen?.(p.opens))} style={{ display: 'inline-flex', gap: 6, alignItems: 'center', justifyContent: 'center', width: full ? '100%' : undefined, padding: p.iconOnly === 'true' ? '6px 8px' : '6px 12px', fontSize: 12, borderRadius: 8, cursor: 'pointer', background: primary ? t.row : 'transparent', color: link ? t.accent : danger ? t.warn : t.fg, fontWeight: primary ? 600 : 400, textDecoration: link ? 'underline' : 'none', border: link ? '1px solid transparent' : `1px solid ${primary ? t.accent : t.line}` }}>{ic(el)}{p.iconOnly === 'true' ? (p.icon ? '' : '◻') : p.label}</button></div>; }
+      case 'buttons': { const labels = splitOptions(p.labels); const kinds = splitOptions(p.kinds); const opens = (p.opens ?? '').split(',').map((x) => x.trim()); const full = p.align === 'full width'; return <div style={{ padding: '4px 10px', display: 'flex', gap: 8, justifyContent: justify(p.align) }}>{labels.map((l, i) => { const k = kinds[i] ?? 'quiet'; const primary = k === 'primary'; const danger = k === 'destructive'; const link = k === 'link'; return <button key={i} type="button" onClick={act(() => opens[i] && onOpen?.(opens[i]))} style={{ flex: full ? 1 : undefined, padding: '6px 12px', fontSize: 12, borderRadius: 8, cursor: 'pointer', background: primary ? t.row : 'transparent', color: link ? t.accent : danger ? t.warn : t.fg, fontWeight: primary ? 600 : 400, textDecoration: link ? 'underline' : 'none', border: link ? '1px solid transparent' : `1px solid ${primary ? t.accent : t.line}` }}>{l}</button>; })}</div>; }
       case 'tip': return p.placement === 'foot' ? <div style={{ margin: '4px 10px', fontSize: 10.5, color: t.sub }}>{p.text}</div> : <div style={{ margin: '4px 10px', padding: '6px 10px', fontSize: 11.5, color: t.sub, border: `1px dashed ${t.line}`, borderRadius: 8 }}>💡 {p.text}</div>;
       case 'notice': return <div style={{ margin: '4px 10px', padding: '8px 10px', fontSize: 12, borderRadius: 8, background: t.row, borderLeft: `3px solid ${p.tone === 'warning' ? t.warn : p.tone === 'error' ? '#e5534b' : t.accent}` }}>{p.tone === 'warning' ? '▲ ' : p.tone === 'error' ? '! ' : 'i '}{p.text}{p.details && <span style={{ color: t.sub }}> · {p.details}</span>}{p.actionText && <div style={{ marginTop: 4, color: t.accent, textDecoration: 'underline' }}>{p.actionText}</div>}</div>;
       case 'toast': return <div style={{ margin: '6px auto', width: 'fit-content', padding: '6px 14px', fontSize: 12, borderRadius: 16, background: t.row, border: `1px solid ${t.line}` }}>{p.text}{p.actionText && <span style={{ marginLeft: 8, color: t.accent }}>{p.actionText}</span>}</div>;
@@ -66,21 +71,28 @@ function Preview({ els, theme, selected, onSelect, get, set, asUser }: { els: El
   };
 
   return (
-    <div style={{ background: t.bg, color: t.fg, borderRadius: 18, padding: '8px 0 12px', width: 340, maxWidth: '100%', border: `1px solid ${t.line}`, fontFamily: 'Inter, system-ui, sans-serif' }}>
+    <div style={{ background: t.bg, color: t.fg, borderRadius: 18, padding: '8px 0 12px', width, minHeight: height, maxWidth: '100%', border: `1px solid ${t.line}`, fontFamily: 'Inter, system-ui, sans-serif' }}>
       {els.length === 0 && <div style={{ padding: 24, textAlign: 'center', color: t.sub, fontSize: 12 }}>Empty page. Use "+ Add element".</div>}
       {els.map((el) => {
         const shown = isShown(el, els, get);
         if (!shown && asUser) return null;
         return (
           <div key={el.id} role="button" tabIndex={0} aria-label={`${ELEMENT_BY_TYPE[el.type].label}: ${el.props.label || el.props.title || el.props.text || ''}${shown ? '' : ' (hidden by its condition right now)'}`}
-            onClick={() => onSelect(el.id)} onKeyDown={(e) => { if (e.key === 'Enter' && e.target === e.currentTarget) onSelect(el.id); }}
-            style={{ cursor: 'pointer', outline: selected === el.id ? `2px solid ${t.accent}` : 'none', outlineOffset: -2, borderRadius: 6, opacity: shown ? 1 : 0.32, position: 'relative' }}>
+            onClick={() => (asUser ? (el.props.opens && el.type === 'row' ? onOpen?.(el.props.opens) : undefined) : onSelect(el.id))} onKeyDown={(e) => { if (e.key === 'Enter' && e.target === e.currentTarget) { if (asUser) { if (el.props.opens && el.type === 'row') onOpen?.(el.props.opens); } else onSelect(el.id); } }}
+            style={{ cursor: asUser && !(el.props.opens && el.type === 'row') ? 'default' : 'pointer', outline: selected === el.id ? `2px solid ${t.accent}` : 'none', outlineOffset: -2, borderRadius: 6, opacity: shown ? 1 : 0.32, position: 'relative' }}>
             {render(el)}
             {el.props.if_el && <span style={{ position: 'absolute', right: 6, top: 2, fontSize: 9, color: shown ? t.sub : t.warn, border: `1px solid ${shown ? t.line : t.warn}`, borderRadius: 4, padding: '0 4px', background: t.bg }}>if</span>}
           </div>);
       })}
     </div>
   );
+}
+
+/** A page of a design drawn on its own, for comparing with a real screenshot. */
+export function PagePreview({ els, themeName = 'Hosted black', width }: { els: El[]; themeName?: string; width?: number }) {
+  const [demo, setDemo] = useState<Record<string, string>>({});
+  const get: Get = (el, key) => demo[el.id + key] ?? el.props[key] ?? '';
+  return <div style={{ width: width ?? 340, maxWidth: '100%' }}><Preview els={els} theme={THEMES[themeName]} selected={null} onSelect={() => {}} get={get} set={(el, k, v) => setDemo((d) => ({ ...d, [el.id + k]: v }))} asUser /></div>;
 }
 
 // ---------------------------------------------------------------- inspector
@@ -100,8 +112,9 @@ function IconPicker({ value, onChange }: { value: string; onChange: (v: string) 
   );
 }
 
-function PropField({ p, value, onChange }: { p: Prop; value: string; onChange: (v: string) => void }) {
+function PropField({ p, value, onChange, pages }: { p: Prop; value: string; onChange: (v: string) => void; pages: { id: string; name: string }[] }) {
   const id = `prop-${p.key}`;
+  if (p.type === 'page') return <div><label htmlFor={id} className="mb-1 block text-sm font-medium">{p.label}</label><select id={id} value={value} onChange={(e) => onChange(e.target.value)}><option value="">Nothing (stays on this page)</option>{pages.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></div>;
   if (p.type === 'icon') return <div><div className="mb-1 text-sm font-medium">{p.label}</div><IconPicker value={value} onChange={onChange} /></div>;
   return (
     <div>
@@ -142,7 +155,7 @@ function Condition({ el, earlier, onChange }: { el: El; earlier: El[]; onChange:
   );
 }
 
-function Inspector({ el, def, earlier, onChange }: { el: El; def: ElementDef; earlier: El[]; onChange: (props: Record<string, string>) => void }) {
+function Inspector({ el, def, earlier, onChange, pages }: { el: El; def: ElementDef; earlier: El[]; onChange: (props: Record<string, string>) => void; pages: { id: string; name: string }[] }) {
   return (
     <div className="space-y-3">
       <div>
@@ -151,7 +164,7 @@ function Inspector({ el, def, earlier, onChange }: { el: El; def: ElementDef; ea
         <p className="mt-1 text-xs text-muted">{def.help}{def.keys ? ` Keys: ${def.keys}.` : ''}</p>
         {def.seenIn?.length ? <p className="mt-1 text-xs text-muted">Already built by hand in: {def.seenIn.join(', ')}.</p> : null}
       </div>
-      {def.props.map((p) => <PropField key={p.key} p={p} value={el.props[p.key] ?? ''} onChange={(v) => onChange({ ...el.props, [p.key]: v })} />)}
+      {def.props.map((p) => <PropField key={p.key} p={p} pages={pages} value={el.props[p.key] ?? ''} onChange={(v) => onChange({ ...el.props, [p.key]: v })} />)}
       <Condition key={el.id} el={el} earlier={earlier} onChange={onChange} />
     </div>
   );
@@ -175,7 +188,10 @@ export function DesignPage() {
   const [demo, setDemo] = useState<Record<string, string>>({});
   const [saved, setSaved] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [err, setErr] = useState(''); const [msg, setMsg] = useState(''); const [askDelete, setAskDelete] = useState(false);
-  const [menu, setMenu] = useState<null | 'add' | 'page' | 'gaps'>(null); const [query, setQuery] = useState('');
+  const [menu, setMenu] = useState<null | 'add' | 'page' | 'gaps' | 'size'>(null); const [query, setQuery] = useState('');
+  const [size, setSize] = useState({ w: '340', h: '' });
+  const [stack, setStack] = useState<string[]>([]);
+  const [renaming, setRenaming] = useState<string | null>(null); const [pendingRename, setPendingRename] = useState<string | null>(null);
   const loadedFor = useRef<string | null>(null); const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
@@ -184,7 +200,10 @@ export function DesignPage() {
     loadedFor.current = page.id;
     try { setEls(parseElements(page.data.elements)); } catch { setEls([]); }
     setSelEl(null); setSaved('idle'); setDemo({});
+    setSize({ w: page.data.width || '340', h: page.data.height || '' });
   }, [page?.id, page?.data.elements]);
+  useEffect(() => { if (pendingRename && pages.some((p) => p.id === pendingRename)) { setRenaming(pendingRename); setPendingRename(null); } }, [pendingRename, pages]);
+  useEffect(() => { if (!asUser) setStack([]); }, [asUser]);
 
   const get: Get = (el, key) => demo[el.id + key] ?? el.props[key] ?? '';
   const setDemoVal = (el: El, key: string, v: string) => setDemo((d) => ({ ...d, [el.id + key]: v }));
@@ -194,16 +213,24 @@ export function DesignPage() {
     setEls(clean); setSaved('saving');
     clearTimeout(timer.current);
     const id = page!.id;
-    timer.current = setTimeout(async () => { try { await api.update(id, { data: { elements: JSON.stringify(clean) } }); setSaved('saved'); } catch (x) { setSaved('error'); setErr((x as Error).message); } }, 600);
+    timer.current = setTimeout(async () => { try { await api.update(id, { data: { elements: JSON.stringify(clean) } }, true); setSaved('saved'); } catch (x) { setSaved('error'); setErr((x as Error).message); } }, 600);
   };
 
-  const spec = useMemo(() => buildDesignSpec(comp.data?.entity.title ?? '', pages.map((p) => ({ name: p.title, elements: p.id === page?.id ? els : safe(p.data.elements) }))), [pages, els, page?.id, comp.data]);
+  const spec = useMemo(() => buildDesignSpec(comp.data?.entity.title ?? '', pages.map((p) => ({ id: p.id, name: p.title, elements: p.id === page?.id ? els : safe(p.data.elements) }))), [pages, els, page?.id, comp.data]);
   const selected = els.find((e) => e.id === selEl) ?? null;
   const idx = selected ? els.indexOf(selected) : -1;
   const flash = (m: string) => { setMsg(m); setTimeout(() => setMsg(''), 2600); };
 
+  const saveSize = (w: string, h: string) => { setSize({ w, h }); if (page) api.update(page.id, { data: { width: w, height: h } }, true).catch(() => {}); };
+  const openPage = (v: string) => {
+    const target = pages.find((p) => p.id === v) ?? pages.find((p) => p.title.toLowerCase() === v.trim().toLowerCase());
+    if (!target || target.id === page?.id) return;
+    setStack((st) => [...st, page!.id]); setSel(target.id); loadedFor.current = null;
+  };
+  const goBack = () => { const prev = stack[stack.length - 1]; if (!prev) return; setStack((st) => st.slice(0, -1)); setSel(prev); loadedFor.current = null; };
+
   async function addPage() {
-    try { const p = await api.create({ kind: 'page', project_id: project.id, data: { name: `Page ${pages.length + 1}`, part_id: partId, elements: '[]' } }); all.reload(); setSel(p.id); loadedFor.current = null; } catch (x) { setErr((x as Error).message); }
+    try { const p = await api.create({ kind: 'page', project_id: project.id, data: { name: `Page ${pages.length + 1}`, part_id: partId, elements: '[]' } }); all.reload(); setSel(p.id); loadedFor.current = null; setPendingRename(p.id); } catch (x) { setErr((x as Error).message); }
   }
   async function duplicatePage() {
     if (!page) return; setMenu(null);
@@ -217,7 +244,7 @@ export function DesignPage() {
     const ids = pages.map((p) => p.id); const i = ids.indexOf(page!.id); const j = i + d; if (j < 0 || j >= ids.length) return;
     [ids[i], ids[j]] = [ids[j], ids[i]]; await api.reorder(ids); all.reload();
   }
-  async function deletePage() { setAskDelete(false); setMenu(null); if (!page) return; try { await api.remove(page.id); setSel(null); loadedFor.current = null; all.reload(); } catch (x) { setErr((x as Error).message); } }
+  async function deletePage() { setAskDelete(false); setMenu(null); if (!page) return; try { await removeWithUndo(page.id, page.title); setSel(null); loadedFor.current = null; all.reload(); } catch (x) { setErr((x as Error).message); } }
 
   const addEl = (type: string) => { const e = newEl(type); const n = [...els]; n.splice(idx >= 0 ? idx + 1 : n.length, 0, e); change(n); setSelEl(e.id); setMenu(null); setQuery(''); };
   const moveEl = (i: number, d: number) => { const n = [...els]; const j = i + d; if (j < 0 || j >= n.length) return; [n[i], n[j]] = [n[j], n[i]]; change(n); };
@@ -254,13 +281,15 @@ export function DesignPage() {
       {/* toolbar: pages as tabs, then the things you do to a page */}
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex w-full min-w-0 items-center gap-1 overflow-x-auto pb-1 [scrollbar-width:thin]" role="tablist" aria-label="Pages">
-          {pages.map((p) => <button key={p.id} role="tab" aria-selected={p.id === page?.id} onClick={() => { setSel(p.id); loadedFor.current = null; }} className={cx('whitespace-nowrap rounded-lg px-3 py-1.5 text-sm', p.id === page?.id ? 'bg-accent-soft font-medium text-accent' : 'text-muted hover:bg-sunken')}>{p.title || 'Untitled'}</button>)}
+          {pages.map((p) => renaming === p.id
+            ? <input key={p.id} autoFocus aria-label="Page name" className="!w-36 !py-1" defaultValue={p.title} onFocus={(e) => e.currentTarget.select()} onBlur={(e) => { rename(e.target.value); setRenaming(null); }} onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') setRenaming(null); }} />
+            : <button key={p.id} role="tab" aria-selected={p.id === page?.id} title="Double-click to rename" onClick={() => { setSel(p.id); loadedFor.current = null; setStack([]); }} onDoubleClick={() => { setSel(p.id); loadedFor.current = null; setRenaming(p.id); }} className={cx('whitespace-nowrap rounded-lg px-3 py-1.5 text-sm', p.id === page?.id ? 'bg-accent-soft font-medium text-accent' : 'text-muted hover:bg-sunken')}>{p.title || 'Untitled'}</button>)}
           <Button variant="ghost" onClick={addPage} aria-label="Add page">+ Page</Button>
         </div>
         <div className="relative">
           <Button onClick={() => setMenu(menu === 'page' ? null : 'page')} aria-haspopup="menu" aria-expanded={menu === 'page'}>Page ▾</Button>
           <Popover open={menu === 'page'} onClose={() => setMenu(null)} className="right-0 top-full mt-1 w-60">
-            <label htmlFor="page-name" className="mb-1 block text-xs text-muted">Rename this page</label>
+            <label htmlFor="page-name" className="mb-1 block text-xs text-muted">Rename this page (or double-click its tab)</label>
             <input id="page-name" key={page!.id} defaultValue={page!.title} onBlur={(e) => rename(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }} />
             <div className="mt-2 grid gap-1">
               <Button onClick={duplicatePage}>Duplicate page</Button>
@@ -269,8 +298,20 @@ export function DesignPage() {
             </div>
           </Popover>
         </div>
+        <div className="relative">
+          <Button onClick={() => setMenu(menu === 'size' ? null : 'size')} aria-haspopup="dialog" aria-expanded={menu === 'size'}>Size: {size.w || '340'}{size.h ? ` × ${size.h}` : ''} ▾</Button>
+          <Popover open={menu === 'size'} onClose={() => setMenu(null)} className="left-0 top-full mt-1 w-72">
+            <div className="mb-2 text-xs text-muted">How big the panel is on screen. Saved with the page.</div>
+            <div className="mb-2 grid grid-cols-4 gap-1">{[['Compact', '280'], ['Panel', '340'], ['Wide', '440'], ['Wider', '560']].map(([l, w]) => <button key={w} onClick={() => saveSize(w, size.h)} className={cx('rounded-md border px-1 py-1.5 text-xs', size.w === w ? 'border-accent bg-accent-soft' : 'border-line hover:bg-sunken')}>{l}<br /><span className="text-muted">{w}</span></button>)}</div>
+            <div className="grid grid-cols-2 gap-2">
+              <div><label htmlFor="size-w" className="mb-1 block text-xs text-muted">Width (px)</label><input id="size-w" type="number" min={200} max={900} value={size.w} onChange={(e) => saveSize(e.target.value, size.h)} /></div>
+              <div><label htmlFor="size-h" className="mb-1 block text-xs text-muted">Height (px, empty = fits content)</label><input id="size-h" type="number" min={80} max={1400} value={size.h} onChange={(e) => saveSize(size.w, e.target.value)} /></div>
+            </div>
+          </Popover>
+        </div>
         <div className="flex gap-1 rounded-lg bg-sunken p-1" role="tablist" aria-label="Preview look">{Object.keys(THEMES).map((n) => <button key={n} role="tab" aria-selected={themeName === n} onClick={() => setThemeName(n)} className={cx('rounded-md px-2.5 py-1 text-sm', themeName === n ? 'bg-panel font-medium shadow-sm' : 'text-muted')}>{n}</button>)}</div>
-        <label className="flex items-center gap-1.5 text-sm" title="Hide elements whose condition is not met, as a user would see it"><input type="checkbox" className="!w-auto" checked={asUser} onChange={(e) => setAsUser(e.target.checked)} /> Preview as user</label>
+        <label className="flex items-center gap-1.5 text-sm" title="Try it like a user: conditions hide elements, buttons open their pages, controls respond"><input type="checkbox" className="!w-auto" checked={asUser} onChange={(e) => setAsUser(e.target.checked)} /> Preview as user</label>
+        {asUser && stack.length > 0 && <Button onClick={goBack}>← Back to {pages.find((p) => p.id === stack[stack.length - 1])?.title}</Button>}
         {spec.gaps.length > 0 && (
           <div className="relative">
             <Button onClick={() => setMenu(menu === 'gaps' ? null : 'gaps')} className="!border-warn/60 !text-warn" aria-haspopup="dialog" aria-expanded={menu === 'gaps'}>⚠ {spec.gaps.length} not in kit</Button>
@@ -302,7 +343,7 @@ export function DesignPage() {
             </Popover>
           </div>
           <div className="flex flex-1 justify-center overflow-y-auto p-4">
-            <Preview els={els} theme={THEMES[themeName]} selected={selEl} onSelect={setSelEl} get={get} set={setDemoVal} asUser={asUser} />
+            <Preview els={els} theme={THEMES[themeName]} selected={selEl} onSelect={setSelEl} get={get} set={setDemoVal} asUser={asUser} width={Number(size.w) || 340} height={Number(size.h) || undefined} onOpen={openPage} onBack={goBack} canGoBack={stack.length > 0} />
           </div>
         </div>
 
@@ -324,13 +365,13 @@ export function DesignPage() {
           <div className="min-h-0 flex-1 overflow-y-auto rounded-xl border border-line bg-panel p-3">
             {selected ? (
               <>
-                <Inspector key={selected.id} el={selected} def={ELEMENT_BY_TYPE[selected.type]} earlier={els.slice(0, idx)} onChange={(props) => change(els.map((e) => (e.id === selected.id ? { ...e, props } : e)))} />
+                <Inspector key={selected.id} el={selected} def={ELEMENT_BY_TYPE[selected.type]} earlier={els.slice(0, idx)} pages={pages.map((p) => ({ id: p.id, name: p.title }))} onChange={(props) => change(els.map((e) => (e.id === selected.id ? { ...e, props } : e)))} />
                 <div className="mt-4 flex gap-2 border-t border-line pt-3"><Button onClick={duplicateEl}>Duplicate</Button><Button variant="danger" className="ml-auto" onClick={removeEl}>Remove</Button></div>
               </>) : <p className="text-sm text-muted">Click an element in the preview or the outline to edit it. Selecting nothing shows this hint.</p>}
           </div>
         </div>
       </div>
-      {askDelete && page && <Confirm danger title={`Delete the page "${page.title}"?`} confirmLabel="Delete page" body="The page and everything on it are removed. This cannot be undone." onConfirm={deletePage} onCancel={() => setAskDelete(false)} />}
+      {askDelete && page && <Confirm danger title={`Delete the page "${page.title}"?`} confirmLabel="Delete page" body="The page and everything on it go to the trash. You can undo it right after." onConfirm={deletePage} onCancel={() => setAskDelete(false)} />}
     </div>
   );
 }

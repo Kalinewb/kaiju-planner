@@ -10,10 +10,14 @@ import { Assistant } from './assistant.tsx';
 import { NeedsYou } from './needs.tsx';
 import { IssuesPage } from './issues.tsx';
 import { DesignPage } from './designer.tsx';
+import { QaPage } from './qa.tsx';
+import { LooksPage } from './looks.tsx';
 import { CommandPalette } from './palette.tsx';
 import { Structure, NodeLayout, NodeOverview, SidebarTree } from './structure.tsx';
 import { ScopeContext } from './scope.tsx';
-import { Collection, HistoryPage, SettingsPage, GlobalIdeas, GlobalTasks, GlobalDocs, GlobalRoadmaps } from './pages-misc.tsx';
+import { ToastHost } from './toast.tsx';
+import { QuickAddDialog } from './quickadd.tsx';
+import { Collection, TrashPage, HistoryPage, SettingsPage, GlobalIdeas, GlobalTasks, GlobalDocs, GlobalRoadmaps } from './pages-misc.tsx';
 
 export interface ProjectCtx { project: Entity; reload: () => void }
 export const useProject = () => useOutletContext<ProjectCtx>();
@@ -64,6 +68,7 @@ function Shell() {
         <nav className="space-y-0.5" aria-label="Main">
           <NavLink to="/" end className={linkCls}>Overview</NavLink>
           <NavLink to="/projects" className={linkCls}>My Projects</NavLink>
+          <NavLink to="/trash" className={linkCls}>Trash</NavLink>
           <NavLink to="/settings" className={linkCls}>Settings</NavLink>
         </nav>
         {pid && project.data && (
@@ -72,6 +77,8 @@ function Shell() {
             <NavLink to={`/p/${pid}`} end className={linkCls}>Dashboard</NavLink>
             <NavLink to={`/p/${pid}/needs`} className={linkCls}><span className="flex items-center justify-between">Needs you{(attn.data?.count ?? 0) > 0 && <span className="rounded-full bg-warn-soft px-2 text-xs text-warn">{attn.data!.count}</span>}</span></NavLink>
             <NavLink to={`/p/${pid}/issues`} className={linkCls}><span className="flex items-center justify-between">Issues{(attn.data?.issues_open ?? 0) > 0 && <span className="rounded-full bg-bad-soft px-2 text-xs text-bad">{attn.data!.issues_open}</span>}</span></NavLink>
+            <NavLink to={`/p/${pid}/looks`} className={linkCls}>Looks</NavLink>
+            <NavLink to={`/p/${pid}/qa`} className={linkCls}>QA</NavLink>
             <NavLink to={`/p/${pid}/structure`} className={linkCls}>Structure</NavLink>
             <div className="pb-1 pl-1"><SidebarTree pid={pid} /></div>
             <NavLink to={`/p/${pid}/definition`} className={linkCls}>Project Definition</NavLink>
@@ -92,9 +99,11 @@ function Shell() {
       </aside>
       {open && <div className="fixed inset-0 z-30 bg-black/40 md:hidden" onClick={() => setOpen(false)} />}
       <CommandPalette open={searchOpen} onClose={() => setSearchOpen(false)} />
+      <ToastHost />
       <div className="min-w-0 flex-1">
         <header className="flex items-center justify-between border-b border-line bg-panel px-4 py-2">
           <Button variant="ghost" className="md:hidden" onClick={() => setOpen(true)} aria-label="Open menu">☰ Menu</Button>
+          {pid && <Button variant="primary" onClick={() => window.dispatchEvent(new Event('kaiju-quick-add'))} aria-label="Quick add a feature, issue or task">＋ Quick add</Button>}
           <Button variant="ghost" onClick={() => setSearchOpen(true)} aria-label="Search everything"><span aria-hidden>⌕</span> Search <kbd className="ml-1 rounded border border-line px-1 text-[10px] text-muted">Ctrl K</kbd></Button>
           <div className="flex items-center gap-1"><ThemeToggle />
             <Button variant="ghost" onClick={async () => { await api.logout(); location.href = '/'; }}>Log out</Button></div>
@@ -107,12 +116,18 @@ function Shell() {
   );
 }
 
+function QuickAddHost() {
+  const [open, setOpen] = useState(false);
+  useEffect(() => { const h = () => setOpen(true); window.addEventListener('kaiju-quick-add', h); return () => window.removeEventListener('kaiju-quick-add', h); }, []);
+  return <QuickAddDialog open={open} onClose={() => setOpen(false)} />;
+}
+
 function ProjectGate() {
   const { pid } = useParams();
   const ctx = useOutletContext<{ project?: Entity; reload: () => void }>();
   if (!ctx.project || ctx.project.id !== pid) return <p className="text-muted">Loading…</p>;
   const base = `/p/${pid}`;
-  return <ScopeContext.Provider value={{ nodeId: null, includeInside: false, ids: null, base, projectBase: base }}><Outlet context={ctx} /></ScopeContext.Provider>;
+  return <ScopeContext.Provider value={{ nodeId: null, includeInside: false, ids: null, base, projectBase: base }}><Outlet context={ctx} /><QuickAddHost /></ScopeContext.Provider>;
 }
 
 export function App() {
@@ -131,12 +146,15 @@ export function App() {
         <Route path="tasks" element={<GlobalTasks />} />
         <Route path="docs" element={<GlobalDocs />} />
         <Route path="settings" element={<SettingsPage />} />
+        <Route path="trash" element={<TrashPage />} />
         <Route path="p/:pid" element={<ProjectGate />}>
           <Route index element={<ProjectDashboard />} />
           <Route path="definition" element={<Definition />} />
           <Route path="structure" element={<Structure />} />
           <Route path="needs" element={<NeedsYou />} />
           <Route path="issues" element={<IssuesPage />} />
+          <Route path="qa" element={<QaPage />} />
+          <Route path="looks" element={<LooksPage />} />
           <Route path="parts" element={<Navigate to="../structure" replace />} />
           <Route path="n/:nid" element={<NodeLayout />}>
             <Route index element={<NodeOverview />} />
@@ -151,6 +169,8 @@ export function App() {
             <Route path="debt" element={<Collection kind="debt" />} />
             <Route path="issues" element={<IssuesPage />} />
             <Route path="design" element={<DesignPage />} />
+            <Route path="qa" element={<QaPage />} />
+            <Route path="looks" element={<LooksPage />} />
           </Route>
           <Route path="features" element={<FeaturesPage />} />
           <Route path="features/new" element={<FeatureWizard />} />

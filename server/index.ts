@@ -25,7 +25,7 @@ export function safetyCopy(): string {
 
 const store = new Store(db);
 const auth = new Auth(db, Number(process.env.KAIJU_SESSION_DAYS ?? 14));
-const app = createApp({ store, auth, trustedProxies: (process.env.KAIJU_TRUSTED_PROXIES ?? '').split(',').map((x) => x.trim().replace(/^::ffff:/, '')).filter(Boolean), webDir: join(root, 'dist', 'web'), safetyCopy });
+const app = createApp({ store, auth, trustedProxies: (process.env.KAIJU_TRUSTED_PROXIES ?? '').split(',').map((x) => x.trim().replace(/^::ffff:/, '')).filter(Boolean), webDir: join(root, 'dist', 'web'), filesDir: join(dataDir, 'files'), safetyCopy });
 
 const port = Number(process.env.PORT ?? 3210);
 const host = process.env.HOST ?? '0.0.0.0';

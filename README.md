@@ -38,6 +38,7 @@ Every component has a **Design** tab for sketching its screens from the omarchy-
 - **Elements:** everything in the kit (page header with back and close, section header, row, switch, selector, stepper, dropdown, text field, button, tip, notice, toast, confirm sheet, empty state, progress ring), plus the few things your own plugins draw by hand that the kit lacks (level bar, number field, slider). The catalog follows the kit's real properties (for example a row's second line, value and badge, the four button kinds, the three notice tones). Controls sit in a row the way the kit does it, and the spec says so (for example `URow + USwitch`). The gaps were checked by reading the QML of the notch, Face ID, Profiles and eGPU. Every element has labels, a placeholder icon from a small set, and the properties that component really has.
 - **Preview:** a mock-up in the kit's style, in *Hosted black* or *Light*. Switches, selectors, steppers and sliders respond so you can feel the layout. Click an element to edit it.
 - **Gaps in the kit:** the kit has no slider yet. You can still use one (and a *Custom element*): they are flagged **NOT IN KIT**, listed under "Missing from the UI kit", and **Track as a kit issue** files an issue against the UI kit component.
+- **Size, buttons, navigation:** *Size* sets the panel width (saved per page). *Buttons* puts two or more buttons side by side. A button (or row) can **open another page**; the preview follows it and shows a *Back* button. Double-click a page tab to rename it, press Enter to save.
 - **Spec for Claude Code:** *Copy spec* or *Download .md* gives a written spec per page naming the kit component, properties, keys and icon names. Claude Code can read it with `kaiju_get_design`, and can draw pages itself with `kaiju_add_item` (kind `page`).
 
 ## QA: issues and comments
@@ -47,6 +48,17 @@ Every component has a **Design** tab for sketching its screens from the omarchy-
 - **Claude can read them on request.** Claude Code tools: `kaiju_list_issues` (filter by open / needs retest / closed, severity, component, with "include everything inside"), `kaiju_get_issue`, and `kaiju_issues_brief`, a ready-to-act-on Markdown work list. In the app, **Copy as Markdown for Claude Code** gives you the same list to paste yourself.
 - **Claude can report and suggest.** It can add issues it finds and fill an empty *Suggested fix*, always labelled *AI suggestion* and never overwriting your text. With a *manager* token it can comment, set *In progress* and *Fixed (needs retest)* with the commit as its reason.
 - **Only you can sign off:** *Verified* and *Won't fix* are owner-only, whatever the token.
+
+## Delete, undo and restore
+
+Every delete takes a **snapshot** first (the item, everything inside it, comments, history and links). An *Undo* toast appears right away, and the **Trash** page lists everything with a *Restore* button. Emptying the trash asks first. Claude Code with a *manager* token can delete too (never projects, a reason is required), and you can restore whatever it removed.
+
+## Adding things fast, QA and Looks
+
+- **Quick add:** one line adds a feature, an issue or a task, inline on lists or from the header's *Quick add* dialog. Tasks can go on any feature.
+- **QA** (sidebar): checklists per component or feature, with pass/fail/skip per check, run history and *Report an issue* on a failure. Start from acceptance criteria, a design page or issues that need a retest.
+- **Looks** (sidebar): upload, paste or drop real screenshots next to the planned design and compare them.
+- **Live lists:** every change refreshes all lists and counts. *Approved* (outlined) and *Completed* (solid with a tick) look different, so approved work no longer looks done.
 
 ## Keeping it clear
 
@@ -83,19 +95,21 @@ claude mcp add kaiju-planner \
 
 3. In Claude Code, for example: *"Read the notes and code in this folder and import this project into my planner. Do a dry run first."*
 
-**Tools Claude gets:** `kaiju_get_schema`, `kaiju_list_projects`, `kaiju_get_project`, `kaiju_bulk_import` (with `dry_run`), `kaiju_add_item`, `kaiju_update_item`, `kaiju_suggest_link`, `kaiju_get_brief`. The brief tool also lets Claude Code fetch the approved instructions for a feature and work from them.
+**Keep it current:** the MCP instructions tell Claude to update the planner whenever it changes or learns something about a project, unless you say not to.
+
+**Tools Claude gets:** `kaiju_delete_item`, `kaiju_list_trash`, `kaiju_restore` (manager), `kaiju_import_documents` and `kaiju_upload_screenshots` (read files from your disk, so content never passes through chat), `kaiju_get_schema`, `kaiju_list_projects`, `kaiju_get_project`, `kaiju_bulk_import` (with `dry_run`), `kaiju_add_item`, `kaiju_update_item`, `kaiju_suggest_link`, `kaiju_get_brief`. The brief tool also lets Claude Code fetch the approved instructions for a feature and work from them.
 
 **Two power levels** (chosen when you create the token; existing tokens stay draft-only):
 
 - **Drafts only:** reads everything and adds drafts.
-- **Manager:** also changes statuses, **including Completed**, and adds comments (`kaiju_set_status`, `kaiju_add_comment`, `kaiju_get_comments`). Every status change needs a written reason (at least 3 characters). It shows as *Claude Code* in the change history and stays visible as a comment on the item. The rules about approval still apply: Claude cannot set Approved, Planned, In development, Testing or Completed on a feature you have not approved.
+- **Manager:** also changes statuses, **including Completed**, and adds comments (`kaiju_set_status`, `kaiju_add_comment`, `kaiju_get_comments`). Every status change needs a written reason (at least 3 characters). It shows as *Claude Code* in the change history and stays visible as a comment on the item. Claude can never set *Approved*.
 
 **What a token can and cannot do** (enforced by the server, not by trust):
 
 - It can read everything and add drafts. Everything it adds is **unapproved**, status "Proposed" for features, labelled *AI suggestion* with the author shown as Claude Code in the change history, and it never fills your "original words".
-- It **cannot** approve, delete, confirm a relationship, create briefs, import export files, or touch settings, passwords, the AI key or tokens, whatever its power level. Those are only possible when you are logged in. A drafts-only token also cannot change a status or comment.
+- It **cannot** approve, confirm a relationship, create briefs, import export files, or touch settings, passwords, the AI key or tokens, whatever its power level. Those are only possible when you are logged in. A drafts-only token also cannot change a status or comment.
 - It **cannot overwrite** text you wrote or touch anything you approved. It can fill empty fields and extend its own drafts. Records with the same name are **skipped, not changed**.
-- Real-world status ("half built") goes in as an unverified note, never as the status itself. Tasks, and roadmap entries, can only attach to features you have approved, so those are reported as *skipped* and can be imported after you approve.
+- Real-world status ("half built") goes in as an unverified note, never as the status itself. Tasks and roadmap entries import as unconfirmed drafts for you to review.
 - A dry run changes nothing. A real import is all-or-nothing, with at most 500 items per call.
 - Tokens are stored as hashes, shown once, and can be revoked at any time. Over the internet they are accepted only over HTTPS. Bad tokens are rate-limited like bad passwords.
 

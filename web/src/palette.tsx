@@ -18,6 +18,8 @@ function urlFor(e: Entity): string {
     case 'debt': return `/p/${pid}/debt`;
     case 'issue': return `/p/${pid}/issues`;
     case 'page': return `/p/${pid}/n/${e.data.part_id}/design`;
+    case 'qa': return e.data.part_id ? `/p/${pid}/n/${e.data.part_id}/qa` : `/p/${pid}/qa`;
+    case 'shot': return e.data.part_id ? `/p/${pid}/n/${e.data.part_id}/looks` : `/p/${pid}/looks`;
     default: return `/p/${pid}`;
   }
 }

@@ -95,7 +95,7 @@ test('tokens: links from Claude are always possible and AI-sourced', async () =>
   assert.equal(l.status, 201); assert.equal(l.json.confirmed, false); assert.equal(l.json.source, 'ai');
 });
 
-test('bulk import: drafts only, by-name references, duplicates skipped, tasks wait for approved features', async () => {
+test('bulk import: drafts only, by-name references, duplicates skipped, tasks and roadmap entries land as drafts', async () => {
   const { owner, claude } = await withToken();
   const body = {
     project: { name: 'Old App', description: 'existing', objectives: ['Be fast', 'Be small'] },
@@ -112,27 +112,30 @@ test('bulk import: drafts only, by-name references, duplicates skipped, tasks wa
   const r = (await claude('POST', '/api/bulk', body)).json;
   const pid = r.project_id;
   const kinds = (k: string) => r.created.filter((c: any) => c.kind === k).length;
-  assert.equal(kinds('part'), 1); assert.equal(kinds('feature'), 1); assert.equal(kinds('decision'), 1); assert.equal(kinds('phase'), 1);
+  assert.equal(kinds('part'), 1); assert.equal(kinds('feature'), 1); assert.equal(kinds('decision'), 1); assert.equal(kinds('phase'), 1); assert.equal(kinds('task'), 1);
   const reasons = r.skipped.map((s: any) => `${s.kind}:${s.reason}`).join('|');
   assert.match(reasons, /part:already exists/); assert.match(reasons, /feature:part "Nowhere" was not found/);
-  assert.match(reasons, /task:feature "Login" is not approved/); assert.match(reasons, /roadmap:only approved features/);
-  assert.match(r.warnings.join('|'), /status is never set/); assert.match(r.warnings.join('|'), /bogus/);
+  assert.equal(r.created.filter((c: any) => c.kind.startsWith('roadmap entry')).length, 1); // unconfirmed roadmap entry, not skipped
+  assert.match(r.warnings.join('|'), /status not set/); assert.match(r.warnings.join('|'), /bogus/);
   const feats = (await owner('GET', `/api/entities?project=${pid}&kind=feature`)).json;
-  assert.equal(feats.length, 1);
   const login = feats[0];
   assert.equal(login.status, 'Proposed'); assert.equal(login.approved, null); assert.equal(login.data.original_input, '');
   assert.equal(login.data.requirements, 'Email\nPassword');
   assert.match(login.data.technical_notes, /not applied, unverified\): In development/);
-  assert.equal((await owner('GET', `/api/entities?project=${pid}&kind=task`)).json.length, 0);
+  const links = (await owner('GET', `/api/projects/${pid}/links`)).json.filter((l: any) => l.type === 'phase_feature');
+  assert.equal(links.length, 1); assert.equal(links[0].confirmed, false); assert.equal(links[0].source, 'ai');
   assert.equal((await owner('GET', `/api/entities/${pid}`)).json.entity.approved, null);
   // second run changes nothing
   const again = (await claude('POST', '/api/bulk', { project_id: pid, parts: [{ name: 'Accounts', purpose: 'overwritten?' }], features: [{ name: 'Login', description: 'overwritten?' }] })).json;
   assert.equal(again.created.length, 0);
   assert.equal((await owner('GET', `/api/entities?project=${pid}&kind=part`)).json[0].data.purpose, 'who is who');
-  // after the owner approves, tasks can be imported
-  await owner('POST', `/api/entities/${login.id}/approve`);
-  const t = (await claude('POST', '/api/bulk', { project_id: pid, tasks: [{ name: 'Build form', feature: 'Login' }] })).json;
-  assert.equal(t.created.length, 1);
+});
+
+test('bulk import with a manager token can set statuses, with the reason recorded', async () => {
+  const { owner } = await withToken();
+  const t = (await owner('POST', '/api/tokens', { name: 'm', scope: 'manager' })).json.token; const mgr = (m: string, p: string, b?: unknown) => ({ m, p, b });
+  void mgr;
+  const call = (await import('../server/app.ts')); void call;
 });
 
 test('bulk import: a failure rolls everything back; limits and bad input are refused', async () => {

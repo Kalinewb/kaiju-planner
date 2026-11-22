@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { KINDS, DOC_SECTIONS } from '../../shared/schema.ts';
 import type { Entity } from '../../shared/schema.ts';
 import { api } from './api.ts';
-import { Button, Card, Empty, PageHeader, StatusBadge, fmtDate, useAsync } from './ui.tsx';
+import { Button, Card, Confirm, Empty, PageHeader, StatusBadge, fmtDate, useAsync } from './ui.tsx';
 import { EntityEditor } from './EntityEditor.tsx';
 import { useProject } from './App.tsx';
 import { useScope } from './scope.tsx';
@@ -232,3 +232,26 @@ export function SettingsPage() {
   );
 }
 void DOC_SECTIONS;
+
+export function TrashPage() {
+  const rows = useAsync(() => api.trash(), []);
+  const ps = useAsync(() => api.list({ kind: 'project' }), []);
+  const [err, setErr] = useState(''); const [askEmpty, setAskEmpty] = useState(false);
+  const name = (id: string | null) => ps.data?.find((p) => p.id === id)?.title ?? '';
+  return (
+    <>
+      <PageHeader title="Trash" help="Everything deleted lands here first, with its comments, relationships and the links that pointed at it. Restore puts it back exactly where it was."
+        actions={rows.data && rows.data.length > 0 && <Button variant="danger" onClick={() => setAskEmpty(true)}>Empty trash</Button>} />
+      {askEmpty && <Confirm danger title="Empty the trash?" confirmLabel="Empty trash" body="These items can no longer be restored." onConfirm={async () => { setAskEmpty(false); await api.emptyTrash(); }} onCancel={() => setAskEmpty(false)} />}
+      {err && <div role="alert" className="mb-3 text-bad">{err}</div>}
+      {rows.data?.length === 0 && <Empty>The trash is empty.</Empty>}
+      <Card className="!p-0"><ul className="divide-y divide-line">{(rows.data ?? []).map((t) => (
+        <li key={t.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
+          <div className="min-w-0"><div className="font-medium">{t.title || 'Untitled'} <span className="text-xs font-normal text-muted">{KINDS[t.kind]?.label ?? t.kind}{t.kind !== 'project' && name(t.project_id) ? ` · ${name(t.project_id)}` : ''}</span></div>
+            <div className="text-xs text-muted">Deleted by {t.deleted_by} · {fmtDate(t.deleted_at)}{t.reason ? ` · ${t.reason}` : ''}</div></div>
+          <div className="flex gap-2"><Button variant="primary" onClick={async () => { try { await api.restore(t.id); } catch (x) { setErr((x as Error).message); } }}>Restore</Button>
+            <Button variant="ghost" onClick={async () => { await api.purge(t.id); }}>Delete for good</Button></div>
+        </li>))}</ul></Card>
+    </>
+  );
+}

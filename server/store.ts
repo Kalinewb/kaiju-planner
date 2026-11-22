@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { KINDS, FEATURE_NEEDS_APPROVAL } from '../shared/schema.ts';
 import type { Entity, Link } from '../shared/schema.ts';
 import { parseElements } from '../shared/uikit.ts';
+import { parseItems } from '../shared/qa.ts';
 
 export class HttpError extends Error {
   status: number;
@@ -81,10 +82,16 @@ export class Store {
       const target = this.db.prepare('SELECT * FROM entities WHERE id = ?').get(id) as Row | undefined;
       if (!target || target.kind !== f.refKind || target.project_id !== project_id)
         throw new HttpError(400, `"${f.label}" points to something that does not exist in this project`);
-      // Tasks may only belong to approved features
-      if (kind === 'task' && f.key === 'feature_id' && !target.approved)
-        throw new HttpError(409, 'Tasks can only be added to approved features. Approve the feature first.');
     }
+  }
+
+  private checkFile(data: Record<string, string>) {
+    if (data.file && !this.db.prepare('SELECT 1 FROM files WHERE id = ?').get(data.file)) throw new HttpError(400, 'That image was not uploaded.');
+  }
+
+  private checkItems(data: Record<string, string>) {
+    if (data.items === undefined) return;
+    try { parseItems(data.items); } catch (e) { throw new HttpError(400, (e as Error).message); }
   }
 
   private checkElements(data: Record<string, string>) {
@@ -122,6 +129,8 @@ export class Store {
     this.checkRefs(project_id, input.kind, data);
     if (input.kind === 'part') this.checkParent(null, data);
     if (input.kind === 'page') this.checkElements(data);
+    if (input.kind === 'qa') this.checkItems(data);
+    if (input.kind === 'shot') this.checkFile(data);
     const status = input.status ?? def.statuses?.[0] ?? '';
     this.checkStatusAllowed(def.kind, status, false);
     const id = randomUUID();
@@ -148,6 +157,8 @@ export class Store {
     this.checkRefs(e.project_id, e.kind, data);
     if (e.kind === 'part') this.checkParent(e.id, data);
     if (e.kind === 'page') this.checkElements(data);
+    if (e.kind === 'qa') this.checkItems(data);
+    if (e.kind === 'shot') this.checkFile(data);
     const prov = { ...e.prov };
     for (const k of Object.keys(incoming)) prov[k] = patch.prov?.[k] ?? 'user';
     const flags = { ...e.flags };
@@ -155,7 +166,7 @@ export class Store {
     const title = data[def.titleField] ?? '';
     this.db.prepare('UPDATE entities SET data=?, prov=?, flags=?, title=?, updated_at=? WHERE id=?').run(J(data), J(prov), J(flags), title, now(), id);
     // Autosaving a design would flood the history, so the elements of a page are not logged one save at a time.
-    const changed = Object.keys(incoming).filter((k) => (before[k] ?? '') !== (data[k] ?? '') && !(e.kind === 'page' && k === 'elements'));
+    const changed = Object.keys(incoming).filter((k) => (before[k] ?? '') !== (data[k] ?? '') && !(e.kind === 'page' && (k === 'elements' || k === 'width' || k === 'height')) && !(e.kind === 'qa' && (k === 'items' || k === 'runs')));
     if (changed.length) {
       const labels = changed.map((k) => def.fields.find((f) => f.key === k)?.label ?? k).join(', ');
       const note = e.approved ? ' (approved version kept until you approve the change)' : '';
@@ -233,25 +244,38 @@ export class Store {
     return out;
   }
 
-  remove(id: string, force: boolean, actor = 'You') {
+  /** Deletes a record after saving a snapshot of it (and what it touched) to the trash. Returns the trash id. */
+  remove(id: string, force: boolean, actor = 'You', reason = ''): string {
     const e = this.get(id);
     const refs = e.kind === 'project' ? [] : this.referencedBy(id);
     if (refs.length && !force)
       throw new HttpError(409, 'Other records point to this one.', { references: refs });
+    const raw = (table: string, where: string, ...args: string[]) => this.db.prepare(`SELECT * FROM ${table} WHERE ${where}`).all(...args) as Row[];
+    const payload: Record<string, unknown> = { entities: [] as Row[], comments: [], revisions: [], links: [], affected: [] as { id: string; key: string; value: string }[] };
+    const trashId = randomUUID();
     const tx = this.db;
     tx.exec('BEGIN');
     try {
       if (e.kind === 'project') {
-        const ids = this.list({ project_id: id }).map((x) => x.id);
+        const ids = [id, ...this.list({ project_id: id }).map((x) => x.id)];
+        payload.entities = [...raw('entities', 'id = ?', id), ...raw('entities', 'project_id = ?', id)];
+        payload.comments = raw('comments', 'project_id = ?', id);
+        payload.links = raw('links', 'project_id = ?', id);
+        payload.revisions = ids.flatMap((x) => raw('revisions', 'entity_id = ?', x));
         for (const x of ids) tx.prepare('DELETE FROM revisions WHERE entity_id = ?').run(x);
         tx.prepare('DELETE FROM entities WHERE project_id = ?').run(id);
         tx.prepare('DELETE FROM links WHERE project_id = ?').run(id);
         tx.prepare('DELETE FROM ai_messages WHERE project_id = ?').run(id);
         tx.prepare('DELETE FROM comments WHERE project_id = ?').run(id);
       } else {
+        payload.entities = raw('entities', 'id = ?', id);
+        payload.comments = raw('comments', 'entity_id = ?', id);
+        payload.revisions = raw('revisions', 'entity_id = ?', id);
+        payload.links = raw('links', 'from_id = ? OR to_id = ?', id, id);
         for (const ref of refs) {
           const o = this.get(ref.id);
           const f = KINDS[o.kind].fields.find((x) => x.label === ref.field)!;
+          (payload.affected as { id: string; key: string; value: string }[]).push({ id: o.id, key: f.key, value: id });
           const data = { ...o.data, [f.key]: '' };
           tx.prepare('UPDATE entities SET data=?, updated_at=? WHERE id=?').run(J(data), now(), o.id);
         }
@@ -259,10 +283,61 @@ export class Store {
         tx.prepare('DELETE FROM revisions WHERE entity_id = ?').run(id);
         tx.prepare('DELETE FROM comments WHERE entity_id = ?').run(id);
       }
+      tx.prepare('INSERT INTO trash (id,entity_id,kind,title,project_id,deleted_at,deleted_by,reason,payload) VALUES (?,?,?,?,?,?,?,?,?)')
+        .run(trashId, id, e.kind, e.title, e.kind === 'project' ? id : e.project_id, now(), actor, reason, J(payload));
       tx.prepare('DELETE FROM entities WHERE id = ?').run(id);
       tx.exec('COMMIT');
     } catch (err) { tx.exec('ROLLBACK'); throw err; }
-    this.log(e.project_id ?? id, null, e.kind, 'deleted', `Deleted ${KINDS[e.kind].label.toLowerCase()} "${e.title}"`, actor, e.data);
+    this.log(e.project_id ?? id, null, e.kind, 'deleted', `Deleted ${KINDS[e.kind].label.toLowerCase()} "${e.title}"${reason ? ` (reason: ${reason})` : ''}. It can be restored from the trash.`, actor, e.data);
+    return trashId;
+  }
+
+  // ---------- trash ----------
+  trash(project_id?: string, includeRestored = false) {
+    const rows = (project_id
+      ? this.db.prepare('SELECT id, entity_id, kind, title, project_id, deleted_at, deleted_by, reason, restored_at FROM trash WHERE project_id = ? ORDER BY deleted_at DESC').all(project_id)
+      : this.db.prepare('SELECT id, entity_id, kind, title, project_id, deleted_at, deleted_by, reason, restored_at FROM trash ORDER BY deleted_at DESC').all()) as Row[];
+    return rows.filter((r) => includeRestored || !r.restored_at);
+  }
+
+  /** Puts a deleted record back with its comments, revisions, relationships and the references that pointed at it. */
+  restore(trashId: string, actor = 'You'): Entity {
+    const t = this.db.prepare('SELECT * FROM trash WHERE id = ?').get(trashId) as Row | undefined;
+    if (!t) throw new HttpError(404, 'That item is not in the trash.');
+    if (t.restored_at) throw new HttpError(409, 'That item was already restored.');
+    const payload = JSON.parse(t.payload) as { entities: Row[]; comments: Row[]; revisions: Row[]; links: Row[]; affected: { id: string; key: string; value: string }[] };
+    if (this.db.prepare('SELECT 1 FROM entities WHERE id = ?').get(t.entity_id)) throw new HttpError(409, 'Something with that id exists again. Nothing was changed.');
+    if (t.kind !== 'project' && t.project_id && !this.db.prepare("SELECT 1 FROM entities WHERE id = ? AND kind = 'project'").get(t.project_id))
+      throw new HttpError(409, 'Its project was deleted too. Restore the project first.');
+    const exists = (id: string) => !!this.db.prepare('SELECT 1 FROM entities WHERE id = ?').get(id);
+    this.db.exec('BEGIN');
+    try {
+      for (const r of payload.entities) {
+        // references to things that are gone now are cleared, so the restored record never points at nothing
+        const data = JSON.parse(r.data) as Record<string, string>;
+        for (const f of KINDS[r.kind]?.fields ?? []) if (f.type === 'ref' && data[f.key] && data[f.key] !== r.id && !exists(data[f.key]) && !payload.entities.some((x) => x.id === data[f.key])) data[f.key] = '';
+        this.db.prepare('INSERT INTO entities (id,project_id,kind,status,title,data,prov,flags,approved,approved_at,sort,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)')
+          .run(r.id, r.project_id, r.kind, r.status, r.title, J(data), r.prov, r.flags, r.approved, r.approved_at, r.sort, r.created_at, now());
+      }
+      for (const c of payload.comments) this.db.prepare('INSERT INTO comments (id,entity_id,project_id,author,body,at) VALUES (?,?,?,?,?,?)').run(c.id, c.entity_id, c.project_id, c.author, c.body, c.at);
+      for (const v of payload.revisions) this.db.prepare('INSERT INTO revisions (id,entity_id,approved_at,data) VALUES (?,?,?,?)').run(v.id, v.entity_id, v.approved_at, v.data);
+      for (const l of payload.links) if (exists(l.from_id) && exists(l.to_id)) this.db.prepare('INSERT OR IGNORE INTO links (id,project_id,from_id,to_id,type,confirmed,source,note,created_at) VALUES (?,?,?,?,?,?,?,?,?)').run(l.id, l.project_id, l.from_id, l.to_id, l.type, l.confirmed, l.source, l.note, l.created_at);
+      for (const a of payload.affected) {
+        const row = this.db.prepare('SELECT data FROM entities WHERE id = ?').get(a.id) as { data: string } | undefined;
+        if (!row) continue;
+        const data = JSON.parse(row.data) as Record<string, string>;
+        if (!data[a.key]) { data[a.key] = a.value; this.db.prepare('UPDATE entities SET data=?, updated_at=? WHERE id=?').run(J(data), now(), a.id); }
+      }
+      this.db.prepare('UPDATE trash SET restored_at = ? WHERE id = ?').run(now(), trashId);
+      this.db.exec('COMMIT');
+    } catch (err) { this.db.exec('ROLLBACK'); throw err; }
+    const back = this.get(t.entity_id);
+    this.log(back.project_id ?? back.id, back.id, back.kind, 'restored', `Restored ${KINDS[back.kind].label.toLowerCase()} "${back.title}" from the trash`, actor);
+    return back;
+  }
+
+  purgeTrash(trashId?: string) {
+    if (trashId) this.db.prepare('DELETE FROM trash WHERE id = ?').run(trashId); else this.db.prepare('DELETE FROM trash').run();
   }
 
   // ---------- comments ----------
@@ -306,7 +381,6 @@ export class Store {
     if (a.project_id !== input.project_id || (input.type !== 'phase_feature' && b.project_id !== input.project_id) || (input.type === 'phase_feature' && b.project_id !== input.project_id))
       throw new HttpError(400, 'Both records must be in this project');
     if (input.from_id === input.to_id) throw new HttpError(400, 'Something cannot depend on itself');
-    if (input.type === 'phase_feature' && !a.approved) throw new HttpError(409, 'Only approved features can be added to the roadmap. Approve the feature first.');
     const dup = this.db.prepare('SELECT id FROM links WHERE from_id=? AND to_id=? AND type=?').get(input.from_id, input.to_id, input.type);
     if (dup) throw new HttpError(409, 'That relationship already exists');
     // Suggestions are never confirmed automatically

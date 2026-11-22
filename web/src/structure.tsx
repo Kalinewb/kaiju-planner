@@ -9,7 +9,9 @@ import { api, ApiError } from './api.ts';
 import { Button, Card, Confirm, Drawer, Empty, PageHeader, Progress, StatusBadge, TypeBadge, cx, useAsync } from './ui.tsx';
 import { EntityEditor } from './EntityEditor.tsx';
 import { StatusControl } from './status.tsx';
+import { removeWithUndo } from './undo.ts';
 import { ReportIssueButton } from './issues.tsx';
+import { QuickAdd } from './quickadd.tsx';
 import { useProject } from './App.tsx';
 import { ScopeContext } from './scope.tsx';
 
@@ -19,7 +21,9 @@ function useStructureData(pid: string) {
   const tasks = useAsync(() => api.list({ project: pid, kind: 'task' }), [pid]);
   const issues = useAsync(() => api.list({ project: pid, kind: 'issue' }), [pid]);
   const pages = useAsync(() => api.list({ project: pid, kind: 'page' }), [pid]);
-  return { parts, feats, tasks, loaded: !!(parts.data && feats.data && tasks.data && issues.data), P: parts.data ?? [], F: feats.data ?? [], T: tasks.data ?? [], I: issues.data ?? [], PG: pages.data ?? [], reload: () => { parts.reload(); feats.reload(); tasks.reload(); issues.reload(); pages.reload(); } };
+  const qas = useAsync(() => api.list({ project: pid, kind: 'qa' }), [pid]);
+  const shots = useAsync(() => api.list({ project: pid, kind: 'shot' }), [pid]);
+  return { parts, feats, tasks, loaded: !!(parts.data && feats.data && tasks.data && issues.data), P: parts.data ?? [], F: feats.data ?? [], T: tasks.data ?? [], I: issues.data ?? [], PG: pages.data ?? [], QA: qas.data ?? [], SH: shots.data ?? [], reload: () => { parts.reload(); feats.reload(); tasks.reload(); issues.reload(); pages.reload(); qas.reload(); shots.reload(); } };
 }
 
 /** Add or edit a component in a side drawer. */
@@ -272,7 +276,7 @@ export function NodeLayout() {
         </div>
       </div>
       <div className="mb-5 flex overflow-x-auto border-b border-line" role="tablist">
-        {tab('', 'Overview')}{tab('/features', 'Features', nF)}{tab('/issues', 'Issues', nI)}{tab('/design', 'Design', d.PG.filter((p) => p.data.part_id === node.id).length)}{tab('/tasks', 'Tasks', nT)}{tab('/roadmap', 'Roadmap')}{tab('/decisions', 'Decisions')}{tab('/docs', 'Docs')}{tab('/debt', 'Debt')}
+        {tab('', 'Overview')}{tab('/features', 'Features', nF)}{tab('/issues', 'Issues', nI)}{tab('/design', 'Design', d.PG.filter((p) => p.data.part_id === node.id).length)}{tab('/looks', 'Looks', d.SH.filter((p) => p.data.part_id === node.id).length)}{tab('/qa', 'QA', d.QA.filter((p) => scope.ids.has(p.data.part_id)).length)}{tab('/tasks', 'Tasks', nT)}{tab('/roadmap', 'Roadmap')}{tab('/decisions', 'Decisions')}{tab('/docs', 'Docs')}{tab('/debt', 'Debt')}
       </div>
       <Outlet context={{ ...ctx, node, parts: d.P, features: d.F, tasks: d.T, reloadStructure: d.reload }} />
       {editing && <ComponentDrawer pid={project.id} parts={d.P} target={node} onClose={() => setEditing(false)} onDone={() => { setEditing(false); d.reload(); }} />}
@@ -284,7 +288,7 @@ export function NodeLayout() {
 function RemoveChild({ part, onDone }: { part: Entity; onDone: () => void }) {
   const [ask, setAsk] = useState<null | { references: { title: string; field: string }[] }>(null); const [err, setErr] = useState('');
   async function del(force: boolean) {
-    try { await api.remove(part.id, force); setAsk(null); onDone(); }
+    try { await removeWithUndo(part.id, part.title, force); setAsk(null); onDone(); }
     catch (x) { if (x instanceof ApiError && x.status === 409 && x.body?.references) setAsk({ references: x.body.references }); else { setErr((x as Error).message); setAsk(null); } }
   }
   return (
@@ -292,7 +296,7 @@ function RemoveChild({ part, onDone }: { part: Entity; onDone: () => void }) {
       <Button variant="ghost" aria-label={`Delete ${part.title}`} onClick={() => setAsk({ references: [] })}>Delete</Button>
       {err && <span role="alert" className="text-xs text-bad">{err}</span>}
       {ask && <Confirm danger title={`Delete "${part.title}"?`} confirmLabel={ask.references.length ? 'Delete anyway' : 'Delete'}
-        body={ask.references.length ? <div><p>These records use it. They stay, but lose the connection:</p><ul className="mt-2 list-disc pl-5">{ask.references.map((r, i) => <li key={i}>{r.title || 'Untitled'} ({r.field})</li>)}</ul></div> : <p>This cannot be undone. Anything inside it moves to the top level.</p>}
+        body={ask.references.length ? <div><p>These records use it. They stay, but lose the connection:</p><ul className="mt-2 list-disc pl-5">{ask.references.map((r, i) => <li key={i}>{r.title || 'Untitled'} ({r.field})</li>)}</ul></div> : <p>It moves to the trash and you can undo it. Anything inside it moves to the top level meanwhile.</p>}
         onConfirm={() => del(ask.references.length > 0)} onCancel={() => setAsk(null)} />}
     </>
   );
@@ -311,6 +315,7 @@ export function NodeOverview() {
   const quick = ['Subplugin', 'Addon', 'Integration', 'Module'].filter((x) => PART_TYPES.includes(x));
   return (
     <>
+      <QuickAdd className="mb-4" partId={node.id} />
       <div className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-4">
         {[['Features', st.features], ['Completed', st.featuresCompleted], ['Open tasks', st.tasksOpen], ['Progress', `${st.progress}%`]].map(([l, v]) => <Card key={l as string}><div className="text-xl font-semibold">{v}</div><div className="text-xs text-muted">{l}</div></Card>)}
       </div>

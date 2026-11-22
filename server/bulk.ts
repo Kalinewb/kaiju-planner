@@ -1,6 +1,7 @@
 // Bulk import for Claude Code. Everything lands as UNAPPROVED drafts labelled as written by Claude.
 // Nothing is approved, completed, confirmed or overwritten. Existing records with the same name are skipped.
 import { KINDS } from '../shared/schema.ts';
+import { newItem } from '../shared/qa.ts';
 import type { Entity } from '../shared/schema.ts';
 import { HttpError } from './store.ts';
 import type { Store } from './store.ts';
@@ -8,7 +9,7 @@ import type { Store } from './store.ts';
 const ACTOR = 'Claude Code (import)';
 const SECTIONS: { key: string; kind: string }[] = [
   { key: 'parts', kind: 'part' }, { key: 'features', kind: 'feature' }, { key: 'phases', kind: 'phase' },
-  { key: 'decisions', kind: 'decision' }, { key: 'docs', kind: 'doc' }, { key: 'debt', kind: 'debt' }, { key: 'issues', kind: 'issue' }, { key: 'tasks', kind: 'task' },
+  { key: 'decisions', kind: 'decision' }, { key: 'docs', kind: 'doc' }, { key: 'debt', kind: 'debt' }, { key: 'issues', kind: 'issue' }, { key: 'pages', kind: 'page' }, { key: 'qa', kind: 'qa' }, { key: 'tasks', kind: 'task' },
 ];
 const MAX_ITEMS = 500;
 const HINT_TARGET: Record<string, string> = { feature: 'technical_notes', task: 'technical_notes', part: 'notes' };
@@ -28,11 +29,11 @@ function fieldsFor(kind: string, raw: Record<string, unknown>, warnings: string[
   const refKeys = new Set(def.fields.filter((f) => f.type === 'ref').map((f) => f.key));
   for (const [k, v] of Object.entries(raw)) {
     const f = def.fields.find((x) => x.key === k);
-    if (!f || f.hidden || refKeys.has(k) || k === 'original_input') { if (!['part', 'parent', 'feature', 'status_hint', 'features', 'status'].includes(k)) warnings.push(`${label}: ignored unknown or protected field "${k}"`); continue; }
+    if (!f || f.hidden || refKeys.has(k) || k === 'original_input') { if (!['part', 'parent', 'feature', 'phase', 'status_hint', 'features', 'status', 'status_note', 'items', 'elements'].includes(k)) warnings.push(`${label}: ignored unknown or protected field "${k}"`); continue; }
     if (f.type === 'select' && typeof v === 'string' && !f.options!.includes(v)) { warnings.push(`${label}: "${v}" is not a valid value for ${f.label}, left empty`); continue; }
     const val = Array.isArray(v) ? v.filter((x) => typeof x === 'string').join('\n') : v;
     if (typeof val !== 'string') { warnings.push(`${label}: "${k}" must be text`); continue; }
-    if (val.trim()) out[k] = val.trim().slice(0, 20000);
+    if (val.trim()) out[k] = val.trim().slice(0, kind === 'doc' && k === 'body' ? 300000 : 20000);
   }
   return out;
 }
@@ -52,7 +53,7 @@ function orderParts(items: any[]): [number, any][] {
   return [...out, ...pending];
 }
 
-export function bulkImport(store: Store, payload: any, opts: { dry_run?: boolean } = {}): BulkReport {
+export function bulkImport(store: Store, payload: any, opts: { dry_run?: boolean; setStatus?: boolean } = {}): BulkReport {
   if (!payload || typeof payload !== 'object') throw new HttpError(400, 'Send a JSON object.');
   const report: BulkReport = { dry_run: !!opts.dry_run, project_id: null, created: [], skipped: [], warnings: [] };
   const total = SECTIONS.reduce((n, s) => n + (Array.isArray(payload[s.key]) ? payload[s.key].length : 0), 0) + (Array.isArray(payload.links) ? payload.links.length : 0);
@@ -94,19 +95,27 @@ export function bulkImport(store: Store, payload: any, opts: { dry_run?: boolean
         if (!raw || typeof raw !== 'object') { report.warnings.push(`${label}: not an object, skipped`); continue; }
         const def = KINDS[kind];
         const data = fieldsFor(kind, raw, report.warnings, label);
+        if (kind === 'qa' && Array.isArray(raw.items)) {
+          data.items = JSON.stringify(raw.items.filter((x: unknown) => (typeof x === 'string' && x.trim()) || (x && typeof x === 'object' && typeof (x as any).text === 'string')).map((x: any) => {
+            const it = newItem(typeof x === 'string' ? x : x.text);
+            if (typeof x === 'object' && opts.setStatus && ['pass', 'fail', 'skip'].includes(x.state)) it.state = x.state;
+            if (typeof x === 'object' && typeof x.note === 'string') it.note = x.note.slice(0, 1000);
+            return it;
+          }));
+        }
+        if (kind === 'page' && Array.isArray(raw.elements)) data.elements = JSON.stringify(raw.elements);
         const title = data[def.titleField];
         if (!title) { report.skipped.push({ kind, title: '(no name)', reason: 'missing name' }); continue; }
         if (find(kind, title)) { report.skipped.push({ kind, title, reason: 'already exists. Not changed.' }); continue; }
 
         // references by name
         const refs: Record<string, string> = {};
-        const refWanted: [string, string, unknown][] = [['part_id', 'part', raw.part], ['feature_id', 'feature', raw.feature], ['parent_id', 'part', raw.parent]];
+        const refWanted: [string, string, unknown][] = [['part_id', 'part', raw.part], ['feature_id', 'feature', raw.feature], ['parent_id', 'part', raw.parent], ['phase_id', 'phase', raw.phase]];
         let bad = '';
         for (const [field, refKind, name] of refWanted) {
           if (!name || !def.fields.some((f) => f.key === field)) continue;
           const target = find(refKind, name);
           if (!target) { bad = `${refKind} "${name}" was not found. Import it first or fix the name.`; break; }
-          if (kind === 'task' && refKind === 'feature' && !target.approved) { bad = `feature "${target.title}" is not approved yet. Tasks can only be added to approved features. Add them after you approve it.`; break; }
           refs[field] = target.id;
         }
         if (bad) { report.skipped.push({ kind, title, reason: bad }); continue; }
@@ -117,18 +126,26 @@ export function bulkImport(store: Store, payload: any, opts: { dry_run?: boolean
           if (target) data[target] = [data[target], `Status according to the import (not applied, unverified): ${raw.status_hint.trim()}`].filter(Boolean).join('\n\n');
           else report.warnings.push(`${label}: status_hint is not supported for ${kind}, ignored`);
         }
-        if (raw.status !== undefined) report.warnings.push(`${label} "${title}": status is never set by imports (it needs your confirmation in the app)`);
         if (kind === 'feature') { data.origin = 'Imported by Claude Code'; data.original_input = ''; }
 
         const prov = Object.fromEntries(Object.keys(data).filter((k) => k !== 'origin' && data[k] !== '').map((k) => [k, 'ai' as const]));
         const e = store.create({ kind, project_id: pid, data: { ...data, ...refs }, status: kind === 'feature' ? 'Proposed' : undefined, prov, actor: ACTOR });
         byName.set(`${kind}:${norm(title)}`, e); isNew.add(e.id);
+        if (raw.status !== undefined) {
+          if (!opts.setStatus) report.warnings.push(`${label} "${title}": status not set (this token cannot change statuses; the owner does that in the app)`);
+          else {
+            try { store.setStatus(e.id, String(raw.status), true, ACTOR, typeof raw.status_note === 'string' && raw.status_note.trim().length >= 3 ? raw.status_note.trim().slice(0, 1000) : 'Set from the owner\'s documents during import'); }
+            catch (x) { report.warnings.push(`${label} "${title}": status "${raw.status}" not set: ${(x as Error).message}`); }
+          }
+        }
         report.created.push({ kind, title, id: e.id });
 
         if (kind === 'phase' && Array.isArray(raw.features)) {
           for (const fname of raw.features) {
             const f = find('feature', fname);
-            report.skipped.push({ kind: 'roadmap', title: `${title} ← ${fname}`, reason: f && !f.approved ? 'only approved features can be added to the roadmap. Do it after you approve the feature.' : 'feature not found' });
+            if (!f) { report.skipped.push({ kind: 'roadmap', title: `${title} <- ${fname}`, reason: 'feature not found' }); continue; }
+            try { store.addLink({ project_id: pid, from_id: f.id, to_id: e.id, type: 'phase_feature', source: 'ai', confirmed: false, note: '', actor: ACTOR }); report.created.push({ kind: 'roadmap entry (possible)', title: `${fname} in ${title}`, id: null }); }
+            catch (x) { report.skipped.push({ kind: 'roadmap', title: `${title} <- ${fname}`, reason: (x as Error).message }); }
           }
         }
       }

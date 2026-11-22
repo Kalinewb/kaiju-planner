@@ -7,6 +7,7 @@ import { Button, Card, Confirm, Empty, Explain, PageHeader, Progress, StatusBadg
 import { EntityEditor } from './EntityEditor.tsx';
 import { useProject } from './App.tsx';
 import { useScope } from './scope.tsx';
+import { QuickAdd } from './quickadd.tsx';
 import { taskPart } from '../../shared/tree.ts';
 
 export function Kanban() {
@@ -19,7 +20,7 @@ export function Kanban() {
   const [filter, setFilter] = useState('');
   const [pending, setPending] = useState<{ t: Entity; to: string } | null>(null);
   const [err, setErr] = useState('');
-  const approved = (feats.data ?? []).filter((f) => f.approved && (!scope.ids || scope.ids.has(f.data.part_id)));
+  const approved = (feats.data ?? []).filter((f) => f.status !== 'Rejected' && (!scope.ids || scope.ids.has(f.data.part_id)));
   async function move(t: Entity, to: string, confirmed = false) {
     setErr('');
     try { await api.setStatus(t.id, to, confirmed); setPending(null); tasks.reload(); }
@@ -29,8 +30,8 @@ export function Kanban() {
   return (
     <>
       <PageHeader title="Tasks" help="Small pieces of development work for approved features. Move cards yourself. Nothing is completed automatically."
-        actions={<Button variant="primary" disabled={!approved.length} onClick={() => setOpen('new')}>New task</Button>} />
-      {!approved.length && <div className="mb-4 rounded-lg bg-warn-soft px-3 py-2 text-warn">Tasks belong to approved features. Approve a feature first.</div>}
+        actions={<Button onClick={() => setOpen('new')}>New task (with details)</Button>} />
+      <QuickAdd kinds={['task']} className="mb-3" />
       <select aria-label="Filter by feature" className="mb-4 max-w-xs" value={filter} onChange={(e) => setFilter(e.target.value)}><option value="">All features</option>{approved.map((f) => <option key={f.id} value={f.id}>{f.title}</option>)}</select>
       {err && <div role="alert" className="mb-3 text-bad">{err}</div>}
       <div className="grid gap-3 overflow-x-auto pb-2 md:grid-cols-3 lg:grid-cols-6">
@@ -69,7 +70,9 @@ export function Roadmap() {
   const feats = useAsync(() => api.list({ project: project.id, kind: 'feature' }), [project.id]);
   const tasks = useAsync(() => api.list({ project: project.id, kind: 'task' }), [project.id]);
   const links = useAsync(() => api.links(project.id), [project.id]);
+  const docs = useAsync(() => api.list({ project: project.id, kind: 'doc' }), [project.id]);
   const [edit, setEdit] = useState<Entity | 'new' | null>(null);
+  const [newTask, setNewTask] = useState<Record<string, string>>({});
   const [err, setErr] = useState('');
   const [askPhase, setAskPhase] = useState<{ p: Entity; to: string } | null>(null);
   const reload = () => { phases.reload(); links.reload(); };
@@ -80,7 +83,7 @@ export function Roadmap() {
     phases.reload();
   }
   const planned = new Set((links.data ?? []).filter((l) => l.type === 'phase_feature').map((l) => l.from_id));
-  const candidates = (feats.data ?? []).filter((f) => f.approved && f.status !== 'Rejected' && !planned.has(f.id) && (!scope.ids || scope.ids.has(f.data.part_id)));
+  const candidates = (feats.data ?? []).filter((f) => f.status !== 'Rejected' && !planned.has(f.id) && (!scope.ids || scope.ids.has(f.data.part_id)));
   return (
     <>
       <PageHeader title="Roadmap" help="Your phases, in the order you choose. Dates appear only if you enter them." actions={<Button variant="primary" onClick={() => setEdit('new')}>Add phase</Button>} />
@@ -89,8 +92,11 @@ export function Roadmap() {
       <div className="space-y-4">
         {list.map((p, i) => {
           const fs = (links.data ?? []).filter((l) => l.type === 'phase_feature' && l.to_id === p.id).map((l) => ({ l, f: (feats.data ?? []).find((f) => f.id === l.from_id) })).filter((x) => x.f);
-          const done = fs.filter((x) => x.f!.status === 'Completed').length;
-          const progress = fs.length ? Math.round((done / fs.length) * 100) : 0;
+          const pTasks = (tasks.data ?? []).filter((t) => t.data.phase_id === p.id);
+          const pDocs = (docs.data ?? []).filter((d) => d.data.phase_id === p.id);
+          const total = fs.length + pTasks.length;
+          const done = fs.filter((x) => x.f!.status === 'Completed').length + pTasks.filter((t) => t.status === 'Completed').length;
+          const progress = total ? Math.round((done / total) * 100) : 0;
           return (
             <Card key={p.id}>
               <div className="flex flex-wrap items-start justify-between gap-2">
@@ -106,15 +112,23 @@ export function Roadmap() {
                   <Button onClick={() => setEdit(p)}>Edit</Button>
                 </div>
               </div>
-              <div className="mt-3"><Progress value={progress} /><div className="mt-1 text-xs text-muted">{fs.length ? `${done} of ${fs.length} planned features completed` : 'No features planned in this phase yet.'}</div></div>
+              <div className="mt-3"><Progress value={progress} /><div className="mt-1 text-xs text-muted">{total ? `${done} of ${total} done (${fs.length} feature${fs.length === 1 ? '' : 's'}, ${pTasks.length} task${pTasks.length === 1 ? '' : 's'})` : 'Nothing planned in this phase yet.'}</div></div>
               <ul className="mt-3 space-y-1">{fs.map(({ l, f }) => (
-                <li key={l.id} className="flex items-center justify-between gap-2 rounded-lg bg-sunken px-3 py-1.5">
-                  <Link className="hover:text-accent" to={`${scope.base}/features/${f!.id}`}>{f!.title}</Link>
-                  <span className="flex items-center gap-1"><span className="text-xs text-muted">{tasks.data?.filter((t) => t.data.feature_id === f!.id).length ?? 0} tasks</span><StatusBadge status={f!.status} /><Button variant="ghost" aria-label={`Remove ${f!.title} from phase`} onClick={async () => { await api.removeLink(l.id); links.reload(); }}>✕</Button></span>
+                <li key={l.id} className={`flex items-center justify-between gap-2 rounded-lg px-3 py-1.5 ${l.confirmed ? 'bg-sunken' : 'border border-dashed border-ai bg-ai-soft'}`}>
+                  <span className="min-w-0"><Link className="hover:text-accent" to={`${scope.base}/features/${f!.id}`}>{f!.title}</Link>{!l.confirmed && <span className="ml-2 text-xs text-ai">suggested by {l.source === 'ai' ? 'Claude' : 'someone'}, not confirmed</span>}</span>
+                  <span className="flex items-center gap-1"><span className="text-xs text-muted">{tasks.data?.filter((t) => t.data.feature_id === f!.id).length ?? 0} tasks</span><StatusBadge status={f!.status} />{!l.confirmed && <Button onClick={async () => { await api.confirmLink(l.id); links.reload(); }}>Confirm</Button>}<Button variant="ghost" aria-label={`Remove ${f!.title} from phase`} onClick={async () => { await api.removeLink(l.id); links.reload(); }}>✕</Button></span>
                 </li>))}</ul>
+              {pTasks.length > 0 && (
+                <div className="mt-3"><div className="mb-1 text-xs font-semibold uppercase text-muted">Tasks in this phase</div>
+                  <ul className="space-y-1">{pTasks.slice(0, 12).map((t) => <li key={t.id} className="flex items-center justify-between gap-2 rounded-lg bg-sunken px-3 py-1 text-sm"><span className="truncate">{t.title}</span><StatusBadge status={t.status} /></li>)}{pTasks.length > 12 && <li className="px-3 text-xs text-muted">+ {pTasks.length - 12} more on the Tasks board</li>}</ul></div>)}
+              {pDocs.length > 0 && (
+                <div className="mt-3"><div className="mb-1 text-xs font-semibold uppercase text-muted">Plans and documents</div>
+                  <ul className="space-y-1">{pDocs.map((d) => <li key={d.id}><Link className="text-sm text-accent hover:underline" to={`${scope.base || `/p/${project.id}`}/docs`}>📄 {d.title}</Link></li>)}</ul></div>)}
+              <form className="mt-3 flex gap-2" onSubmit={async (e) => { e.preventDefault(); const name = (newTask[p.id] ?? '').trim(); if (!name) return; try { await api.create({ kind: 'task', project_id: project.id, data: { name, phase_id: p.id, part_id: scope.nodeId ?? '' } }); setNewTask({ ...newTask, [p.id]: '' }); } catch (x) { setErr((x as Error).message); } }}>
+                <input aria-label={`Add a task to ${p.title}`} placeholder="+ Add a task to this phase…" value={newTask[p.id] ?? ''} onChange={(e) => setNewTask({ ...newTask, [p.id]: e.target.value })} /><Button>Add</Button></form>
               {candidates.length > 0 && (
                 <select aria-label={`Add feature to ${p.title}`} className="mt-3 max-w-xs" value="" onChange={async (e) => { if (!e.target.value) return; try { await api.addLink({ project_id: project.id, from_id: e.target.value, to_id: p.id, type: 'phase_feature' }); links.reload(); } catch (x) { setErr((x as Error).message); } }}>
-                  <option value="">+ Add an approved feature…</option>{candidates.map((f) => <option key={f.id} value={f.id}>{f.title}</option>)}</select>)}
+                  <option value="">+ Add a feature to this phase…</option>{candidates.map((f) => <option key={f.id} value={f.id}>{f.title} ({f.status})</option>)}</select>)}
             </Card>);
         })}
       </div>

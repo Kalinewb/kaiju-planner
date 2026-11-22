@@ -97,13 +97,11 @@ test('editing an approved feature keeps the approved version; original words nev
   assert.equal(r.revisions[0].data.description, 'find stuff');
 });
 
-test('tasks need an approved feature; completing needs confirmation', async () => {
+test('tasks can belong to any feature; completing needs confirmation', async () => {
   const { call, login } = setup();
   await login();
   const pid = await project(call);
   const f = (await call('POST', '/api/entities', { kind: 'feature', project_id: pid, data: { name: 'F' } })).json;
-  assert.equal((await call('POST', '/api/entities', { kind: 'task', project_id: pid, data: { name: 'T', feature_id: f.id } })).status, 409);
-  await call('POST', `/api/entities/${f.id}/approve`);
   const t = await call('POST', '/api/entities', { kind: 'task', project_id: pid, data: { name: 'T', feature_id: f.id } });
   assert.equal(t.status, 201);
   assert.equal(t.json.status, 'Backlog');

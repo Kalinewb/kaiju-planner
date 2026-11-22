@@ -7,6 +7,7 @@ import { Button, Card, Drawer, Empty, PageHeader, StatusBadge, cx, useAsync } fr
 import { EntityEditor } from './EntityEditor.tsx';
 import { useProject } from './App.tsx';
 import { useScope } from './scope.tsx';
+import { QuickAdd } from './quickadd.tsx';
 
 const SEV_TONE: Record<string, string> = { Blocker: 'bg-bad-soft text-bad', High: 'bg-bad-soft text-bad', Medium: 'bg-warn-soft text-warn', Low: 'bg-sunken text-muted', 'Not set': 'bg-sunken text-muted' };
 export function SeverityBadge({ s }: { s?: string }) {
@@ -66,6 +67,7 @@ export function IssuesPage() {
     <>
       <PageHeader title="Issues" help="Something wrong, with what happened and a suggested fix. Claude can read these when you ask it to, and can report issues it finds. Only you can verify a fix."
         actions={<><CopyButton label="Copy as Markdown for Claude Code" load={async () => (await api.issuesBrief(project.id, briefParams)).markdown} /><Button variant="primary" onClick={() => setDrawer('new')}>Report an issue</Button></>} />
+      <QuickAdd kinds={['issue']} className="mb-3" />
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <div className="flex gap-1 rounded-lg bg-sunken p-1" role="tablist" aria-label="State">
           {TABS.map((t) => <button key={t.key} role="tab" aria-selected={tab === t.key} onClick={() => setTab(t.key)} className={cx('rounded-md px-3 py-1 text-sm', tab === t.key ? 'bg-panel font-medium shadow-sm' : 'text-muted hover:text-fg')}>{t.label} <span className="text-xs text-muted">{all.filter((r) => inTab(r, t.key)).length}</span></button>)}

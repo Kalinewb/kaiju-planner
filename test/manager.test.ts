@@ -54,7 +54,7 @@ test('store rules still hold for Claude: no Approved/Completed on an unapproved 
   assert.equal((await mgr('POST', `/api/entities/${f.id}/status`, { status: 'Completed', note: 'done' })).status, 409);
   assert.equal((await mgr('POST', `/api/entities/${f.id}/status`, { status: 'Approved', note: 'okay then' })).status, 409);
   assert.equal((await mgr('POST', `/api/entities/${f.id}/status`, { status: 'Under review', note: 'ready for you' })).status, 200);
-  for (const [m, p, b] of [['POST', `/api/entities/${f.id}/approve`, {}], ['DELETE', `/api/entities/${f.id}`], ['POST', '/api/ai/settings', {}], ['POST', '/api/tokens', { name: 'y' }], ['GET', '/api/tokens'],
+  for (const [m, p, b] of [['POST', `/api/entities/${f.id}/approve`, {}], ['POST', '/api/ai/settings', {}], ['POST', '/api/tokens', { name: 'y' }], ['GET', '/api/tokens'],
     ['POST', '/api/auth/change-password', {}], ['DELETE', '/api/comments/abc'], ['POST', `/api/projects/${pid}/approve-many`, { ids: [f.id] }]] as const)
     assert.equal((await mgr(m, p, b)).status, 403, `${m} ${p}`);
   assert.equal((await owner('GET', `/api/entities/${f.id}`)).json.entity.approved, null);

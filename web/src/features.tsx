@@ -9,6 +9,7 @@ import { EntityEditor } from './EntityEditor.tsx';
 import { useProject } from './App.tsx';
 import { useScope } from './scope.tsx';
 import { ReportIssueButton } from './issues.tsx';
+import { QuickAdd } from './quickadd.tsx';
 
 export function FeaturesPage() {
   const { project } = useProject();
@@ -21,6 +22,7 @@ export function FeaturesPage() {
     <>
       <PageHeader title="Features" help="Things you want the application to do. An idea only becomes a requirement when you approve it."
         actions={<><Link to={`${scope.base}/features/future`}><Button>Plan a future feature</Button></Link><Link to={`${scope.base}/features/new`}><Button variant="primary">Describe a new feature</Button></Link></>} />
+      <QuickAdd kinds={['feature']} className="mb-3" />
       <div className="mb-4 flex flex-wrap gap-2">
         <input aria-label="Search features" placeholder="Search…" className="max-w-56" value={q} onChange={(e) => setQ(e.target.value)} />
         <select aria-label="Filter by status" className="max-w-48" value={st} onChange={(e) => setSt(e.target.value)}><option value="">All statuses</option>{FEATURE_STATUSES.map((s) => <option key={s}>{s}</option>)}</select>

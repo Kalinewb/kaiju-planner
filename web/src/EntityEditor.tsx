@@ -6,6 +6,7 @@ import { api, ApiError } from './api.ts';
 import { Button, CategoryBadge, Confirm, cx, fmtDate } from './ui.tsx';
 import { StatusControl } from './status.tsx';
 import { Comments } from './comments.tsx';
+import { removeWithUndo } from './undo.ts';
 
 interface Props {
   entity?: Entity;           // existing record; omit to create
@@ -57,7 +58,7 @@ export function EntityEditor({ entity, kind, projectId, options = {}, initial, h
 
   async function del(force = false) {
     if (!entity) return;
-    try { await api.remove(entity.id, force); setAskDelete(null); onDeleted?.(); }
+    try { await removeWithUndo(entity.id, entity.title, force); setAskDelete(null); onDeleted?.(); }
     catch (x) { if (x instanceof ApiError && x.status === 409 && x.body?.references) setAskDelete({ references: x.body.references }); else setErr((x as Error).message); }
   }
 
@@ -164,7 +165,7 @@ export function EntityEditor({ entity, kind, projectId, options = {}, initial, h
             <div>
               <p>These records use it. If you delete it, they stay but lose the connection:</p>
               <ul className="mt-2 list-disc pl-5">{askDelete.references.map((r, i) => <li key={i}>{r.title || 'Untitled'} ({r.field})</li>)}</ul>
-            </div>) : <p>This cannot be undone. (Exporting first keeps a copy.){kind === 'project' && ' Everything inside this project is deleted too.'}</p>}
+            </div>) : <p>It moves to the trash, and you can undo it right after or restore it later from the Trash page.{kind === 'project' && ' Everything inside this project goes with it.'}</p>}
           onConfirm={() => del(askDelete.references.length > 0)} onCancel={() => setAskDelete(null)} />
       )}
     </form>

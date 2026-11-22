@@ -80,6 +80,26 @@ export function openDb(path: string): DatabaseSync {
       at TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_comments_entity ON comments(entity_id, at);
+    CREATE TABLE IF NOT EXISTS trash (
+      id TEXT PRIMARY KEY,
+      entity_id TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      title TEXT NOT NULL,
+      project_id TEXT,
+      deleted_at TEXT NOT NULL,
+      deleted_by TEXT NOT NULL,
+      reason TEXT NOT NULL DEFAULT '',
+      payload TEXT NOT NULL,
+      restored_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_trash_project ON trash(project_id, deleted_at);
+    CREATE TABLE IF NOT EXISTS files (
+      id TEXT PRIMARY KEY,
+      mime TEXT NOT NULL,
+      size INTEGER NOT NULL,
+      name TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS sessions (token_hash TEXT PRIMARY KEY, expires_at INTEGER NOT NULL);
   `);

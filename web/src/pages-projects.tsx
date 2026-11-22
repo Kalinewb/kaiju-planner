@@ -10,6 +10,7 @@ import { useProject } from './App.tsx';
 import { StatusControl } from './status.tsx';
 import { buildTree, nodeStats } from '../../shared/tree.ts';
 import { TypeBadge } from './ui.tsx';
+import { QuickAdd } from './quickadd.tsx';
 
 function Stat({ label, value }: { label: string; value: number | string }) {
   return <div><div className="text-xl font-semibold">{value}</div><div className="text-xs text-muted">{label}</div></div>;
@@ -135,6 +136,7 @@ export function ProjectDashboard() {
         actions={<StatusControl entity={project} label={false} onChanged={() => reload()} />} />
       {!project.approved && <div className="mb-4 rounded-lg bg-warn-soft px-3 py-2 text-warn">The project definition has not been approved yet. <Link className="underline" to={`/p/${project.id}/definition`}>Review it</Link></div>}
       {project.approved && hasUnapprovedChanges(project) && <div className="mb-4 rounded-lg bg-warn-soft px-3 py-2 text-warn">The project definition has edits you have not approved. <Link className="underline" to={`/p/${project.id}/definition`}>Review them</Link></div>}
+      <QuickAdd className="mb-4" />
       <Card className="mb-4"><div className="mb-1 flex justify-between"><span className="font-medium">Overall progress</span><span>{s.progress}%</span></div><Progress value={s.progress} />
         <div className="mt-1 text-xs text-muted">{s.tasksTotal ? `Based on ${s.tasksTotal} task(s)` : 'No tasks yet, so this is based on completed features.'}</div></Card>
       <p className="mb-4 text-sm text-muted">{s.parts} component{s.parts === 1 ? '' : 's'} · {s.features} feature{s.features === 1 ? '' : 's'} ({s.featuresCompleted} completed, {s.featuresInDevelopment} in development, {s.featuresPlanned} approved or planned, {s.featuresIdeas} still ideas) · {s.tasksOpen} open task{s.tasksOpen === 1 ? '' : 's'} · <Link className="text-accent" to={`/p/${project.id}/issues`}>{issuesOpen} open issue{issuesOpen === 1 ? '' : 's'}</Link></p>

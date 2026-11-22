@@ -4,7 +4,8 @@ import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
 import { bodyLimit } from 'hono/body-limit';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { getConnInfo } from '@hono/node-server/conninfo';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import { join, relative } from 'node:path';
 import { Auth, ApiTokens, LoginLimiter, isPrivateIp, MIN_PASSWORD } from './auth.ts';
 import { bulkImport } from './bulk.ts';
@@ -25,6 +26,7 @@ export interface AppOptions {
   webDir?: string;
   limiter?: LoginLimiter;
   fetchImpl?: FetchLike;        // how the server talks to Claude (replaced in tests)
+  filesDir?: string;            // where uploaded screenshots are kept
   safetyCopy?: () => string; // writes a never-overwriting copy of the database, returns its path
 }
 
@@ -122,9 +124,11 @@ export function createApp(o: AppOptions) {
       if (!tok) { limiter.fail(ip); return c.json({ error: 'Invalid or revoked token.' }, 401); }
       const m = c.req.method; const path = c.req.path;
       const allowed = (m === 'GET' && !/^\/api\/(auth|ai|tokens)(\/|$)/.test(path))
-        || (m === 'POST' && (path === '/api/entities' || path === '/api/links' || path === '/api/bulk'))
+        || (m === 'POST' && (path === '/api/entities' || path === '/api/links' || path === '/api/bulk' || path === '/api/files'))
         || (m === 'PATCH' && /^\/api\/entities\/[^/]+$/.test(path))
-        || (tok.scope === 'manager' && m === 'POST' && /^\/api\/entities\/[^/]+\/(status|comments)$/.test(path));
+        || (tok.scope === 'manager' && m === 'POST' && /^\/api\/entities\/[^/]+\/(status|comments)$/.test(path))
+        || (tok.scope === 'manager' && m === 'DELETE' && /^\/api\/entities\/[^/]+$/.test(path))
+        || (tok.scope === 'manager' && m === 'POST' && /^\/api\/trash\/[^/]+\/restore$/.test(path));
       if (!allowed) return c.json({ error: 'This token cannot do that. Approving, completing, deleting and settings can only be done by you in the app.' }, 403);
       c.set('principal', 'claude'); c.set('scope', tok.scope);
       return next();
@@ -194,7 +198,21 @@ export function createApp(o: AppOptions) {
   app.delete('/api/comments/:id', (c) => { store.removeComment(c.req.param('id')); return c.json({ ok: true }); });
   app.get('/api/projects/:id/comment-counts', (c) => c.json(store.commentCounts(c.req.param('id'))));
   app.post('/api/entities/:id/approve', (c) => c.json(store.approve(c.req.param('id'))));
-  app.delete('/api/entities/:id', (c) => { store.remove(c.req.param('id'), c.req.query('force') === '1'); return c.json({ ok: true }); });
+  app.delete('/api/entities/:id', (c) => {
+    const id = c.req.param('id');
+    if (c.get('principal') === 'claude') {
+      // Allowed with a manager token because everything is snapshotted first and can be restored. Whole projects stay owner-only.
+      if (store.get(id).kind === 'project') throw new HttpError(403, 'Deleting a whole project is something only you can do.');
+      const reason = (c.req.query('reason') ?? '').trim();
+      if (reason.length < 3) throw new HttpError(400, 'Say why in "reason" (at least 3 characters). Every deletion by Claude needs a reason.');
+      return c.json({ ok: true, trash_id: store.remove(id, true, 'Claude Code', reason.slice(0, 1000)) });
+    }
+    return c.json({ ok: true, trash_id: store.remove(id, c.req.query('force') === '1', 'You', (c.req.query('reason') ?? '').slice(0, 1000)) });
+  });
+  app.get('/api/trash', (c) => c.json(store.trash(c.req.query('project'))));
+  app.post('/api/trash/:id/restore', (c) => c.json(store.restore(c.req.param('id'), c.get('principal') === 'claude' ? 'Claude Code' : 'You')));
+  app.delete('/api/trash/:id', (c) => { store.purgeTrash(c.req.param('id')); return c.json({ ok: true }); });
+  app.post('/api/trash/empty', (c) => { store.purgeTrash(); return c.json({ ok: true }); });
   app.post('/api/reorder', async (c) => { const b = await c.req.json(); store.reorder(b.ids); return c.json({ ok: true }); });
 
   app.get('/api/overview', (c) => c.json(store.list({ kind: 'project' }).map((p) => ({ project: p, summary: store.summary(p.id) }))));
@@ -205,13 +223,39 @@ export function createApp(o: AppOptions) {
 
   app.post('/api/links', async (c) => {
     const b = await c.req.json();
-    if (c.get('principal') === 'claude') return c.json(store.addLink({ project_id: b.project_id, from_id: b.from_id, to_id: b.to_id, type: b.type === 'phase_feature' ? 'related' : b.type, note: typeof b.note === 'string' ? b.note : '', source: 'ai', confirmed: false, actor: 'Claude Code' }), 201);
+    if (c.get('principal') === 'claude') return c.json(store.addLink({ project_id: b.project_id, from_id: b.from_id, to_id: b.to_id, type: b.type, note: typeof b.note === 'string' ? b.note : '', source: 'ai', confirmed: false, actor: 'Claude Code' }), 201);
     return c.json(store.addLink(b), 201);
   });
   app.post('/api/bulk', bodyLimit({ maxSize: 5 * 1024 * 1024 }), async (c) => {
     const b = await c.req.json().catch(() => null);
-    return c.json(bulkImport(store, b, { dry_run: b?.dry_run === true }));
+    return c.json(bulkImport(store, b, { dry_run: b?.dry_run === true, setStatus: c.get('principal') === 'owner' || c.get('scope') === 'manager' }));
   });
+  // ---------- uploaded pictures (screenshots) ----------
+  const IMG: { mime: string; ext: string; ok: (b: Uint8Array) => boolean }[] = [
+    { mime: 'image/png', ext: 'png', ok: (b) => b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47 },
+    { mime: 'image/jpeg', ext: 'jpg', ok: (b) => b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff },
+    { mime: 'image/gif', ext: 'gif', ok: (b) => b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x38 },
+    { mime: 'image/webp', ext: 'webp', ok: (b) => b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46 && b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50 },
+  ];
+  const filesDir = o.filesDir;
+  app.post('/api/files', bodyLimit({ maxSize: 10 * 1024 * 1024 }), async (c) => {
+    if (!filesDir) throw new HttpError(503, 'File storage is not set up on this server.');
+    const bytes = new Uint8Array(await c.req.arrayBuffer());
+    const kind = IMG.find((k) => k.ok(bytes));
+    if (!kind || bytes.length < 16) throw new HttpError(400, 'Only PNG, JPEG, GIF and WEBP pictures are accepted (SVG is not).');
+    mkdirSync(filesDir, { recursive: true });
+    const id = randomUUID();
+    writeFileSync(join(filesDir, id), bytes);
+    store.db.prepare('INSERT INTO files (id,mime,size,name,created_at) VALUES (?,?,?,?,?)').run(id, kind.mime, bytes.length, (c.req.header('x-filename') ?? '').slice(0, 200), new Date().toISOString());
+    return c.json({ id, url: `/api/files/${id}`, mime: kind.mime, size: bytes.length }, 201);
+  });
+  app.get('/api/files/:id', (c) => {
+    const row = store.db.prepare('SELECT mime FROM files WHERE id = ?').get(c.req.param('id')) as { mime: string } | undefined;
+    if (!row || !filesDir || !/^[0-9a-f-]{36}$/.test(c.req.param('id'))) throw new HttpError(404, 'Not found');
+    const data = readFileSync(join(filesDir, c.req.param('id')));
+    return new Response(data, { headers: { 'content-type': row.mime, 'cache-control': 'private, max-age=3600', 'x-content-type-options': 'nosniff', 'content-security-policy': "default-src 'none'; sandbox" } });
+  });
+
   // ---------- UI designs ----------
   app.get('/api/entities/:id/design-spec', (c) => {
     const part = store.get(c.req.param('id'));
@@ -263,7 +307,7 @@ export function createApp(o: AppOptions) {
     const id = c.req.param('id');
     const all = store.list({ project_id: id });
     const pick = (k: string) => all.filter((e) => e.kind === k);
-    return c.json({ project: store.get(id), parts: pick('part'), features: pick('feature'), tasks: pick('task'), phases: pick('phase'), decisions: pick('decision'), docs: pick('doc'), debt: pick('debt'), issues: pick('issue'), links: store.links(id), summary: store.summary(id) });
+    return c.json({ project: store.get(id), parts: pick('part'), features: pick('feature'), tasks: pick('task'), phases: pick('phase'), decisions: pick('decision'), docs: pick('doc'), debt: pick('debt'), issues: pick('issue'), pages: pick('page'), qa: pick('qa'), shots: pick('shot'), links: store.links(id), summary: store.summary(id) });
   });
 
   // Access tokens (owner only)

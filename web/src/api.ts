@@ -8,7 +8,12 @@ export class ApiError extends Error {
 export let onUnauthorized: () => void = () => {};
 export const setUnauthorizedHandler = (f: () => void) => { onUnauthorized = f; };
 
-async function req<T>(method: string, path: string, body?: unknown): Promise<T> {
+/** Every successful change bumps this, so every list on screen reloads and nothing goes stale. */
+export const mutations = { n: 0, subs: new Set<() => void>() };
+let bumpTimer: ReturnType<typeof setTimeout> | undefined;
+const bump = () => { mutations.n++; clearTimeout(bumpTimer); bumpTimer = setTimeout(() => mutations.subs.forEach((f) => f()), 60); };
+
+async function req<T>(method: string, path: string, body?: unknown, silent = false): Promise<T> {
   const res = await fetch('/api' + path, {
     method, credentials: 'same-origin',
     headers: body === undefined ? undefined : { 'content-type': 'application/json' },
@@ -18,6 +23,7 @@ async function req<T>(method: string, path: string, body?: unknown): Promise<T> 
   const json = text ? JSON.parse(text) : null;
   if (res.status === 401 && !path.startsWith('/auth/')) onUnauthorized();
   if (!res.ok) throw new ApiError(res.status, json);
+  if (method !== 'GET' && !silent && !path.startsWith('/auth/')) bump();
   return json as T;
 }
 
@@ -34,6 +40,7 @@ export interface AiStatus { hasKey: boolean; keyHint: string; enabled: boolean; 
 export interface Proposal { kind: 'feature'; data: Record<string, string>; part_id: string; user_said: string; unclear_fields: string[]; open_questions: string[]; my_suggestions: string[] }
 export interface LinkSuggestion { from_id: string; to_id: string; type: string; reason: string }
 
+export interface TrashRow { id: string; entity_id: string; kind: string; title: string; project_id: string | null; deleted_at: string; deleted_by: string; reason: string }
 export interface TokenInfo { id: string; name: string; scope: string; created_at: string; last_used: string | null }
 export interface CommentRow { id: string; entity_id: string; author: string; body: string; at: string }
 
@@ -69,10 +76,20 @@ export const api = {
   list: (p: { project?: string; kind?: string; q?: string }) => req<Entity[]>('GET', '/entities?' + new URLSearchParams(Object.entries(p).filter(([, v]) => v) as [string, string][])),
   get: (id: string) => req<{ entity: Entity; revisions: { id: string; approved_at: string; data: Record<string, string> }[]; referencedBy: { id: string; kind: string; title: string; field: string }[] }>('GET', `/entities/${id}`),
   create: (b: { kind: string; project_id?: string; data?: Record<string, string>; status?: string; flags?: Record<string, string> }) => req<Entity>('POST', '/entities', b),
-  update: (id: string, b: { data?: Record<string, string>; flags?: Record<string, string | null> }) => req<Entity>('PATCH', `/entities/${id}`, b),
+  update: (id: string, b: { data?: Record<string, string>; flags?: Record<string, string | null> }, silent = false) => req<Entity>('PATCH', `/entities/${id}`, b, silent),
   setStatus: (id: string, status: string, confirmed = false) => req<Entity>('POST', `/entities/${id}/status`, { status, confirmed }),
   approve: (id: string) => req<Entity>('POST', `/entities/${id}/approve`, {}),
-  remove: (id: string, force = false) => req('DELETE', `/entities/${id}${force ? '?force=1' : ''}`),
+  remove: (id: string, force = false, reason = '') => req<{ ok: true; trash_id: string }>('DELETE', `/entities/${id}?${new URLSearchParams({ ...(force ? { force: '1' } : {}), ...(reason ? { reason } : {}) })}`),
+  trash: (project?: string) => req<TrashRow[]>('GET', `/trash${project ? `?project=${project}` : ''}`),
+  restore: (trashId: string) => req<Entity>('POST', `/trash/${trashId}/restore`, {}),
+  purge: (trashId: string) => req('DELETE', `/trash/${trashId}`),
+  emptyTrash: () => req('POST', '/trash/empty', {}),
+  upload: async (file: File | Blob, name = '') => {
+    const res = await fetch('/api/files', { method: 'POST', credentials: 'same-origin', headers: { 'x-filename': name || (file as File).name || '' }, body: file });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok) throw new ApiError(res.status, j);
+    return j as { id: string; url: string };
+  },
   overview: () => req<{ project: Entity; summary: Summary }[]>('GET', '/overview'),
   summary: (pid: string) => req<Summary>('GET', `/projects/${pid}/summary`),
   links: (pid: string) => req<Link[]>('GET', `/projects/${pid}/links`),

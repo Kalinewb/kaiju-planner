@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
+import { mutations } from './api.ts';
 import type { ReactNode, ButtonHTMLAttributes } from 'react';
 import { CATEGORY_LABEL } from '../../shared/schema.ts';
 import type { Category } from '../../shared/schema.ts';
@@ -32,12 +33,12 @@ export function PageHeader({ title, help, actions }: { title: string; help?: str
 }
 
 const STATUS_TONE: Record<string, string> = {
-  Completed: 'bg-ok-soft text-ok', Approved: 'bg-ok-soft text-ok', Live: 'bg-ok-soft text-ok', Resolved: 'bg-ok-soft text-ok',
+  Completed: 'bg-ok-soft text-ok', Approved: 'border border-ok/50 text-ok', Live: 'bg-ok-soft text-ok', Resolved: 'bg-ok-soft text-ok', Verified: 'bg-ok-soft text-ok',
   'In development': 'bg-accent-soft text-accent', 'In progress': 'bg-accent-soft text-accent', Testing: 'bg-accent-soft text-accent', 'In review': 'bg-accent-soft text-accent',
   Rejected: 'bg-bad-soft text-bad', 'On hold': 'bg-warn-soft text-warn', 'Needs clarification': 'bg-warn-soft text-warn', 'Not decided': 'bg-warn-soft text-warn',
 };
 export function StatusBadge({ status }: { status: string }) {
-  return <span className={cx('inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium', STATUS_TONE[status] ?? 'bg-sunken text-muted')}>{status || '—'}</span>;
+  return <span className={cx('inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium', STATUS_TONE[status] ?? 'bg-sunken text-muted')}>{status === 'Completed' || status === 'Verified' ? '✓ ' : ''}{status || '—'}</span>;
 }
 
 const CAT_TONE: Record<Category, string> = {
@@ -84,12 +85,13 @@ export function useAsync<T>(fn: () => Promise<T>, deps: unknown[]) {
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
+  const version = useSyncExternalStore((cb) => { mutations.subs.add(cb); return () => { mutations.subs.delete(cb); }; }, () => mutations.n);
   useEffect(() => {
     let live = true;
     fn().then((d) => { if (live) { setData(d); setError(null); } }).catch((e) => live && setError(e.message));
     return () => { live = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [...deps, tick]);
+  }, [...deps, tick, version]);
   return { data, error, reload: () => setTick((t) => t + 1), setData };
 }
 
