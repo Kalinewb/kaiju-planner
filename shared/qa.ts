@@ -48,8 +48,13 @@ export function checksFromDesign(pageName: string, els: El[], nameOfPage: (v: st
       case 'field': out.push(`${where}: Enter saves, Esc reverts an unsaved change`); break;
       case 'button': out.push(`${where}: does what "${p.label}" says${p.opens ? ` and opens "${nameOfPage(p.opens)}"` : ''}`); break;
       case 'buttons': out.push(`${where}: each button does what its label says`); break;
-      case 'row': if (p.clickable === 'true') out.push(`${where}: Enter, Space and a click all activate it${p.opens ? ` and open "${nameOfPage(p.opens)}"` : ''}`); break;
+      case 'row': if (p.toggle && p.toggle !== 'none') out.push(`${where}: the switch turns on and off and the change sticks`); if (p.buttons) out.push(`${where}: each of ${splitOptions(p.buttons).join(', ')} does what its label says`); if (p.clickable === 'true') out.push(`${where}: Enter, Space and a click all activate it${p.opens ? ` and open "${nameOfPage(p.opens)}"` : ''}`); break;
       case 'notice': case 'toast': out.push(`${where}: appears when it should and reads correctly`); break;
+      case 'tabs': case 'sidenav': out.push(`${where}: choosing each of ${splitOptions(p.options).join(', ')} shows only that one's content`); break;
+      case 'disclosure': out.push(`${where}: opens and closes, and the text inside reads correctly`); break;
+      case 'state': out.push(`${where}: each of ${splitOptions(p.options).join(', ')} shows the right elements and hides the others`); break;
+      case 'card': if (p.toggle && p.toggle !== 'none') out.push(`${where}: the switch turns on and off and the change sticks`); break;
+      case 'header': if (p.master && p.master !== 'none') out.push(`${where}: the master switch turns the whole thing on and off`); break;
       case 'confirm': out.push(`${where}: Cancel and Esc do nothing, Confirm does the action`); break;
       default: break;
     }

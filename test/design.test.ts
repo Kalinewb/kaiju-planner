@@ -9,9 +9,9 @@ import type { El } from '../shared/uikit.ts';
 import { checksFromDesign } from '../shared/qa.ts';
 
 test('the element catalog matches the UI kit and flags what the kit lacks', () => {
-  const kit = ELEMENTS.filter((e) => e.kit).map((e) => e.kit).sort();
+  const kit = ELEMENTS.filter((e) => e.kit && e.type !== 'state').map((e) => e.kit).sort();
   assert.deepEqual(kit, ['UBack', 'UButton', 'UButton', 'UConfirmSheet', 'UEmpty', 'UField', 'UNotice', 'UPick', 'URing', 'URow', 'USection', 'USegmented', 'UStepper', 'USwitch', 'UTip', 'UToast']);
-  assert.deepEqual(ELEMENTS.filter((e) => !e.kit).map((e) => e.type).sort(), ['card', 'custom', 'level', 'number', 'slider', 'viewfinder']);
+  assert.deepEqual(ELEMENTS.filter((e) => !e.kit).map((e) => e.type).sort(), ['calendar', 'card', 'chart', 'custom', 'disclosure', 'level', 'number', 'readout', 'sidenav', 'slider', 'status', 'tabs', 'text', 'tiles', 'viewfinder']);
   // every gap that exists in the owner's plugins says where it was found
   for (const e of ELEMENTS.filter((x) => !x.kit && !['custom', 'slider'].includes(x.type))) assert.ok(e.seenIn?.length, e.type);
   assert.ok(ICONS.length >= 24 && new Set(ICONS.map((i) => i.name)).size === ICONS.length);
@@ -123,4 +123,26 @@ test('a button can be the thing a condition looks at', () => {
   const get = (el: any, k: string) => (el.id === 'b1' && k === 'pressed' ? 'Save' : el.props[k] ?? '');
   assert.equal(isShown(note, list, get), true);
   assert.equal(isShown(note, list, (el: any, k: string) => (el.id === 'b1' && k === 'pressed' ? 'Cancel' : el.props[k] ?? '')), false);
+});
+
+test('a page state switch, tabs and a disclosure can drive conditions', () => {
+  const st = { id: 's1', type: 'state', props: { options: 'Scanning, Success, Failed', selected: '1' } };
+  const ok = { id: 'c1', type: 'card', props: { title: 'Anna', if_el: 's1', if_op: 'is', if_val: 'Success' } };
+  const tabs = { id: 't1', type: 'tabs', props: { options: 'Overview, Advanced', selected: '1' } };
+  const adv = { id: 'a1', type: 'text', props: { text: 'x', if_el: 't1', if_op: 'is', if_val: 'Advanced' } };
+  const dis = { id: 'd1', type: 'disclosure', props: { label: 'Show details', text: 'more' } };
+  const more = { id: 'm1', type: 'text', props: { text: 'y', if_el: 'd1', if_op: 'is open' } };
+  const list = cleanConditions([st, ok, tabs, adv, dis, more]);
+  assert.ok(list[1].props.if_el && list[3].props.if_el && list[5].props.if_el);
+  const get = (v: Record<string, string>) => (el: any, k: string) => v[el.id + k] ?? el.props[k] ?? '';
+  assert.equal(isShown(ok, list, get({})), false);
+  assert.equal(isShown(ok, list, get({ s1selected: '2' })), true);
+  assert.equal(isShown(adv, list, get({ t1selected: '2' })), true);
+  assert.equal(isShown(more, list, get({})), false);
+  assert.equal(isShown(more, list, get({ d1open: 'true' })), true);
+});
+
+test('the spec names a page surface and its width', () => {
+  const md = buildDesignSpec('Face', [{ name: 'Settings', elements: [], surface: 'Face-size panel', width: '370' }]).markdown;
+  assert.match(md, /Surface: Face-size panel, 370px wide/);
 });

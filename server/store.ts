@@ -166,7 +166,7 @@ export class Store {
     const title = data[def.titleField] ?? '';
     this.db.prepare('UPDATE entities SET data=?, prov=?, flags=?, title=?, updated_at=? WHERE id=?').run(J(data), J(prov), J(flags), title, now(), id);
     // Autosaving a design would flood the history, so the elements of a page are not logged one save at a time.
-    const changed = Object.keys(incoming).filter((k) => (before[k] ?? '') !== (data[k] ?? '') && !(e.kind === 'page' && (k === 'elements' || k === 'width' || k === 'height')) && !(e.kind === 'qa' && (k === 'items' || k === 'runs')));
+    const changed = Object.keys(incoming).filter((k) => (before[k] ?? '') !== (data[k] ?? '') && !(e.kind === 'page' && (k === 'elements' || k === 'width' || k === 'height' || k === 'surface')) && !(e.kind === 'qa' && (k === 'items' || k === 'runs')));
     if (changed.length) {
       const labels = changed.map((k) => def.fields.find((f) => f.key === k)?.label ?? k).join(', ');
       const note = e.approved ? ' (approved version kept until you approve the change)' : '';
