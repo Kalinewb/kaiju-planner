@@ -10,8 +10,8 @@ import { checksFromDesign } from '../shared/qa.ts';
 
 test('the element catalog matches the UI kit and flags what the kit lacks', () => {
   const kit = ELEMENTS.filter((e) => e.kit && e.type !== 'state').map((e) => e.kit).sort();
-  assert.deepEqual(kit, ['UBack', 'UButton', 'UButton', 'UConfirmSheet', 'UEmpty', 'UField', 'UNotice', 'UPick', 'URing', 'URow', 'USection', 'USegmented', 'UStepper', 'USwitch', 'UTip', 'UToast']);
-  assert.deepEqual(ELEMENTS.filter((e) => !e.kit).map((e) => e.type).sort(), ['calendar', 'card', 'chart', 'custom', 'disclosure', 'level', 'number', 'readout', 'sidenav', 'slider', 'status', 'tabs', 'text', 'tiles', 'viewfinder']);
+  assert.deepEqual(kit, ['UBack', 'UButton', 'UButton', 'UConfirmSheet', 'UEmpty', 'UField', 'ULevel', 'UNotice', 'UPick', 'URing', 'URow', 'USection', 'USegmented', 'USegmented', 'UStepper', 'UStepper', 'USwitch', 'UTip', 'UToast']);
+  assert.deepEqual(ELEMENTS.filter((e) => !e.kit).map((e) => e.type).sort(), ['calendar', 'card', 'chart', 'custom', 'disclosure', 'readout', 'sidenav', 'slider', 'status', 'text', 'tiles', 'viewfinder']);
   // every gap that exists in the owner's plugins says where it was found
   for (const e of ELEMENTS.filter((x) => !x.kit && !['custom', 'slider'].includes(x.type))) assert.ok(e.seenIn?.length, e.type);
   assert.ok(ICONS.length >= 24 && new Set(ICONS.map((i) => i.name)).size === ICONS.length);
