@@ -4,7 +4,7 @@ import { openDb } from '../server/db.ts';
 import { Store } from '../server/store.ts';
 import { Auth, LoginLimiter } from '../server/auth.ts';
 import { createApp } from '../server/app.ts';
-import { ELEMENTS, ICONS, buildDesignSpec, cleanConditions, conditionText, isShown, newEl, parseElements } from '../shared/uikit.ts';
+import { ELEMENTS, ICONS, buildDesignSpec, fillTokens, parseSamples, cleanConditions, conditionText, isShown, newEl, parseElements } from '../shared/uikit.ts';
 import type { El } from '../shared/uikit.ts';
 import { checksFromDesign } from '../shared/qa.ts';
 
@@ -152,4 +152,36 @@ test('an element can sit in the left or right column, and other values are dropp
   const list = parseElements(json);
   assert.deepEqual(list.map((e) => e.props.col), ['left', 'right', undefined]);
   assert.match(buildDesignSpec('X', [{ name: 'P', elements: list }]).markdown, /left column of a two-column layout/);
+});
+
+test('two conditions can be joined with and / or, and a bad second one is dropped alone', () => {
+  const sw = { id: 'w', type: 'switch', props: { label: 'On', on: 'true' } };
+  const sel = { id: 's', type: 'selector', props: { options: 'A, B', selected: '1' } };
+  const t = { id: 't', type: 'text', props: { text: 'x', if_el: 'w', if_op: 'is on', if2_el: 's', if2_op: 'is', if2_val: 'B', if_join: 'and' } };
+  const list = cleanConditions([sw, sel, t]);
+  const get = (v: Record<string, string>) => (el: any, k: string) => v[el.id + k] ?? el.props[k] ?? '';
+  assert.equal(isShown(list[2], list, get({})), false);
+  assert.equal(isShown(list[2], list, get({ sselected: '2' })), true);
+  const either = { ...list[2], props: { ...list[2].props, if_join: 'or' } };
+  assert.equal(isShown(either, list, get({})), true);
+  assert.match(conditionText(either, list), /is on or /);
+  const bad = cleanConditions([sw, { ...t, props: { ...t.props, if2_op: 'bogus' } }])[1];
+  assert.equal(bad.props.if_el, 'w'); assert.equal(bad.props.if2_el, undefined); assert.equal(bad.props.if_join, undefined);
+});
+
+test('a confirm sheet can appear only when its button is pressed', () => {
+  const b = { id: 'b', type: 'button', props: { label: 'Remove', kind: 'destructive' } };
+  const c = { id: 'c', type: 'confirm', props: { text: 'Sure?', opened_by: 'remove' } };
+  const get = (v: Record<string, string>) => (el: any, k: string) => v[el.id + k] ?? el.props[k] ?? '';
+  assert.equal(isShown(c, [b, c], get({})), false);
+  assert.equal(isShown(c, [b, c], get({ bpressed: 'true' })), true);
+});
+
+test('placeholders are listed in the spec and filled from sample values; looks are kept', () => {
+  const list = parseElements(JSON.stringify([{ id: 'a', type: 'text', props: { text: '{faces} faces can unlock', look: 'hover' } }, { id: 'b', type: 'text', props: { text: 'x', look: 'bogus' } }]));
+  assert.equal(list[0].props.look, 'hover'); assert.equal(list[1].props.look, undefined);
+  const md = buildDesignSpec('X', [{ name: 'P', elements: list }]).markdown;
+  assert.match(md, /Placeholders .*\{faces\}/); assert.match(md, /hover state/);
+  assert.equal(fillTokens('{faces} faces', parseSamples('faces=3')), '3 faces');
+  assert.equal(fillTokens('{nope}', {}), '{nope}');
 });

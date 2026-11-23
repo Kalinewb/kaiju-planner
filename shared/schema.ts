@@ -223,6 +223,7 @@ export const KINDS: Record<string, KindDef> = {
       { key: 'width', label: 'Preview width', type: 'text', hidden: true },
       { key: 'height', label: 'Preview height', type: 'text', hidden: true },
       { key: 'surface', label: 'Surface', type: 'text', hidden: true },
+      { key: 'samples', label: 'Sample values for placeholders', type: 'text', hidden: true },
       l('notes', 'Notes for Claude Code'),
     ],
   },

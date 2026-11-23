@@ -16,7 +16,7 @@ const label: Prop = { key: 'label', label: 'Label', type: 'text', def: 'Label' }
 const icon: Prop = { key: 'icon', label: 'Placeholder icon', type: 'icon', def: '' };
 
 export const ELEMENTS: ElementDef[] = [
-  { type: 'header', label: 'Page header (back and close)', group: 'Layout', kit: 'UBack', keys: 'Esc goes back one level, then closes', help: 'The page title and the close control. In the notch the ONLY back control is the invisible strip at the top middle (a chevron shows on hover, Esc is its alias), so panels draw no back button of their own and keep the top-middle zone clear: title on the left, buttons on the right.', props: [{ key: 'title', label: 'Title', type: 'text', def: 'Title' }, icon, { key: 'subtitle', label: 'Small-caps line under the title', type: 'text', def: '' }, { key: 'action', label: 'Text action on the right (e.g. Refresh)', type: 'text', def: '' }, { key: 'master', label: 'Master switch on the right', type: 'select', options: ['none', 'off', 'on'], def: 'none' }, { key: 'back', label: 'Draw a back button (against the design rule)', type: 'bool', def: 'false' }, { key: 'close', label: 'Show close', type: 'bool', def: 'true' }] },
+  { type: 'header', label: 'Page header (back and close)', group: 'Layout', kit: 'UBack', keys: 'Esc goes back one level, then closes', help: 'The page title and the close control. In the notch the ONLY back control is the invisible strip at the top middle (a chevron shows on hover, Esc is its alias), so panels draw no back button of their own and keep the top-middle zone clear: title on the left, buttons on the right.', props: [{ key: 'title', label: 'Title', type: 'text', def: 'Title' }, icon, { key: 'style', label: 'Title style', type: 'select', options: ['title', 'prompt'], def: 'title', help: 'prompt is the menu\'s quiet "Go…" line' }, { key: 'subtitle', label: 'Small-caps line under the title', type: 'text', def: '' }, { key: 'action', label: 'Text action on the right (e.g. Refresh)', type: 'text', def: '' }, { key: 'master', label: 'Master switch on the right', type: 'select', options: ['none', 'off', 'on'], def: 'none' }, { key: 'back', label: 'Draw a back button (against the design rule)', type: 'bool', def: 'false' }, { key: 'close', label: 'Show close', type: 'bool', def: 'true' }] },
   { type: 'section', label: 'Section header', group: 'Layout', kit: 'USection', help: 'A heading that groups what follows (a heading to a screen reader).', props: [{ key: 'title', label: 'Title', type: 'text', def: 'Section' }] },
   { type: 'row', label: 'Row', group: 'Layout', kit: 'URow', keys: 'Enter, Return or Space activates when clickable', help: 'A list item: a glyph, a label, an optional second line, a value on the right and one badge. The kit allows one badge; Face ID draws two chips (Sudo, Lock) by hand.', props: [label, { key: 'detail', label: 'Second line', type: 'text', def: '' }, { key: 'value', label: 'Value (right side)', type: 'text', def: '' }, { key: 'badge', label: 'Badge (a word or two)', type: 'text', def: '' }, { key: 'chips', label: 'Chips (comma separated, e.g. Sudo, Lock; the kit allows one badge, so more are a gap)', type: 'options', def: '' }, { key: 'toggle', label: 'Switch inside the row', type: 'select', options: ['none', 'off', 'on'], def: 'none' }, { key: 'buttons', label: 'Buttons on the right (comma separated, e.g. Remove…, Open settings)', type: 'options', def: '' }, icon, { key: 'clickable', label: 'Clickable', type: 'bool', def: 'false' }, { key: 'current', label: 'The chosen entry', type: 'bool', def: 'false' }, { key: 'opens', label: 'When pressed, open page', type: 'page', def: '' }] },
   { type: 'switch', label: 'Switch', group: 'Controls', kit: 'USwitch', via: 'URow', keys: 'Enter, Return or Space toggles', help: 'An on/off setting in a row. The switch itself only carries an accessible name; the visible label is the row\'s.', props: [label, icon, { key: 'on', label: 'On', type: 'bool', def: 'false' }] },
@@ -29,7 +29,7 @@ export const ELEMENTS: ElementDef[] = [
   { type: 'tip', label: 'Tip', group: 'Feedback', kit: 'UTip', help: 'A hint tied to a control: a small box that floats, or one reserved line at the foot of the page.', props: [{ key: 'text', label: 'Text (at most 60 characters)', type: 'text', def: 'A helpful hint.' }, { key: 'placement', label: 'Placement', type: 'select', options: ['float', 'foot'], def: 'float' }] },
   { type: 'notice', label: 'Notice', group: 'Feedback', kit: 'UNotice', help: 'A message that stays until it is dealt with, with an optional details link and one recovery action.', props: [{ key: 'text', label: 'Text', type: 'text', def: 'Something to know.' }, { key: 'tone', label: 'Tone', type: 'select', options: ['info', 'warning', 'error'], def: 'info' }, { key: 'actionText', label: 'Recovery action (one verb)', type: 'text', def: '' }, { key: 'details', label: 'Details (a code)', type: 'text', def: '' }] },
   { type: 'toast', label: 'Toast', group: 'Feedback', kit: 'UToast', help: 'A short message that appears and goes away by itself, with an optional action.', props: [{ key: 'text', label: 'Text', type: 'text', def: 'Saved.' }, { key: 'actionText', label: 'Action (optional)', type: 'text', def: '' }] },
-  { type: 'confirm', label: 'Confirm sheet', group: 'Feedback', kit: 'UConfirmSheet', keys: 'Enter confirms a non-destructive sheet, Esc cancels', help: 'Asks before something that cannot be undone.', props: [{ key: 'text', label: 'Question', type: 'text', def: 'Are you sure?' }, { key: 'yes', label: 'Confirm button', type: 'text', def: 'Confirm' }, { key: 'no', label: 'Cancel button', type: 'text', def: 'Cancel' }, { key: 'danger', label: 'Destructive', type: 'bool', def: 'false' }, { key: 'floating', label: 'Floats at the foot of the page', type: 'bool', def: 'true' }] },
+  { type: 'confirm', label: 'Confirm sheet', group: 'Feedback', kit: 'UConfirmSheet', keys: 'Enter confirms a non-destructive sheet, Esc cancels', help: 'Asks before something that cannot be undone.', props: [{ key: 'text', label: 'Question', type: 'text', def: 'Are you sure?' }, { key: 'yes', label: 'Confirm button', type: 'text', def: 'Confirm' }, { key: 'no', label: 'Cancel button', type: 'text', def: 'Cancel' }, { key: 'danger', label: 'Destructive', type: 'bool', def: 'false' }, { key: 'floating', label: 'Floats at the foot of the page', type: 'bool', def: 'true' }, { key: 'opened_by', label: 'Appears when this button is pressed (its label; leave empty to always show)', type: 'text', def: '' }] },
   { type: 'empty', label: 'Empty state', group: 'Feedback', kit: 'UEmpty', help: 'What to show when there is nothing yet, with an optional action button.', props: [{ key: 'text', label: 'Text', type: 'text', def: 'Nothing here yet.' }, { key: 'actionText', label: 'Action button (optional)', type: 'text', def: '' }] },
   { type: 'ring', label: 'Progress ring', group: 'Feedback', kit: 'URing', help: 'A ring that shows progress, or spins while the length of the wait is unknown.', props: [label, { key: 'value', label: 'Value (0 to 100)', type: 'number', def: '60' }, { key: 'indeterminate', label: 'Unknown length (spinning)', type: 'bool', def: 'false' }] },
   { type: 'slider', label: 'Slider', group: 'Not in the kit yet', kit: null, via: 'URow (stacked)', help: 'A draggable value. The kit has no slider. None of your own plugins has one either; AirPods and Touchpad (third-party) do.', props: [label, { key: 'min', label: 'Minimum', type: 'number', def: '0' }, { key: 'max', label: 'Maximum', type: 'number', def: '100' }, { key: 'value', label: 'Value', type: 'number', def: '50' }, icon] },
@@ -51,12 +51,18 @@ export const ELEMENTS: ElementDef[] = [
 ];
 
 /** Reserved properties on every element: "show only if" another element, earlier on the page, has a value. */
-export const COND_KEYS = ['if_el', 'if_op', 'if_val'] as const;
+export const LOOKS = ['hover', 'focused', 'selected', 'disabled'];
+export const COND_KEYS = ['if_el', 'if_op', 'if_val', 'if_join', 'if2_el', 'if2_op', 'if2_val'] as const;
 export const COND_OPS_BY_TYPE: Record<string, string[]> = {
   switch: ['is on', 'is off'], selector: ['is', 'is not'], dropdown: ['is', 'is not'],
   button: ['was pressed', 'was not pressed'], tabs: ['is', 'is not'], sidenav: ['is', 'is not'], state: ['is', 'is not'], disclosure: ['is open', 'is closed'], buttons: ['last pressed is', 'last pressed is not'],
   stepper: ['is at least', 'is at most'], slider: ['is at least', 'is at most'], level: ['is at least', 'is at most'], ring: ['is at least', 'is at most'], number: ['is at least', 'is at most'],
 };
+
+/** Replace {name} with a sample value when one is given, leave it as {name} otherwise. */
+export const fillTokens = (text: string, samples: Record<string, string>) => text.replace(/\{([a-z0-9_]+)\}/gi, (m, k) => samples[k.toLowerCase()] ?? m);
+export const parseSamples = (s: string | undefined): Record<string, string> => Object.fromEntries((s ?? '').split(',').map((x) => x.split('=')).filter((a) => a.length >= 2 && a[0].trim()).map((a) => [a[0].trim().toLowerCase(), a.slice(1).join('=').trim()]));
+export const tokensIn = (els: El[]) => [...new Set(els.flatMap((e) => Object.values(e.props).flatMap((v) => [...v.matchAll(/\{([a-z0-9_]+)\}/gi)].map((m) => m[1].toLowerCase()))))];
 
 export const splitOptions = (s: string | undefined) => (s ?? '').split(',').map((x) => x.trim()).filter(Boolean);
 
@@ -97,6 +103,7 @@ export function parseElements(json: string | undefined): El[] {
       props[p.key] = val;
     }
     if (e.props && typeof (e.props as any).col === 'string' && ['left', 'right'].includes((e.props as any).col)) props.col = (e.props as any).col;
+    if (typeof (e.props as any)?.look === 'string' && LOOKS.includes((e.props as any).look)) props.look = (e.props as any).look;
     for (const k of COND_KEYS) { const val = (e.props as Record<string, unknown> | undefined)?.[k]; if (typeof val === 'string' && val) props[k] = val.slice(0, 200); }
     return { id: typeof e.id === 'string' && e.id ? e.id.slice(0, 20) : Math.random().toString(36).slice(2, 9), type: def.type, props };
   });
@@ -106,9 +113,12 @@ export function parseElements(json: string | undefined): El[] {
 /** A condition may only look at an element that comes earlier on the page, and the operator has to suit that element. */
 export function cleanConditions(all: El[]): El[] {
   return all.map((el, i) => {
-    const src = el.props.if_el ? all.slice(0, i).find((x) => x.id === el.props.if_el) : undefined;
-    if (!src || !(COND_OPS_BY_TYPE[src.type] ?? []).includes(el.props.if_op ?? '')) { const { if_el, if_op, if_val, ...rest } = el.props; void if_el; void if_op; void if_val; return { ...el, props: rest }; }
-    return el;
+    const before = all.slice(0, i);
+    const ok = (pre: string) => { const src = el.props[`${pre}_el`] ? before.find((x) => x.id === el.props[`${pre}_el`]) : undefined; return !!src && (COND_OPS_BY_TYPE[src.type] ?? []).includes(el.props[`${pre}_op`] ?? ''); };
+    const props = { ...el.props };
+    const drop = (pre: string) => { delete props[`${pre}_el`]; delete props[`${pre}_op`]; delete props[`${pre}_val`]; };
+    if (!ok('if')) { drop('if'); drop('if2'); delete props.if_join; } else if (!ok('if2')) { drop('if2'); delete props.if_join; } else if (props.if_join !== 'or') props.if_join = 'and';
+    return { ...el, props };
   });
 }
 
@@ -127,26 +137,42 @@ export function elementValue(el: El, get: (el: El, key: string) => string): stri
 
 /** Is this element shown right now, given the current values of the elements before it? */
 export function isShown(el: El, all: El[], get: (el: El, key: string) => string): boolean {
-  if (!el.props.if_el) return true;
-  const src = all.find((x) => x.id === el.props.if_el);
-  if (!src) return true;
-  const v = elementValue(src, get); const want = el.props.if_val ?? '';
-  switch (el.props.if_op) {
-    case 'is on': return v === 'on'; case 'is off': return v === 'off';
-    case 'is open': return v === 'open'; case 'is closed': return v === 'closed';
-    case 'was pressed': return v === 'pressed'; case 'was not pressed': return v !== 'pressed';
-    case 'last pressed is': return v.toLowerCase() === want.toLowerCase(); case 'last pressed is not': return v.toLowerCase() !== want.toLowerCase();
-    case 'is': return v.toLowerCase() === want.toLowerCase(); case 'is not': return v.toLowerCase() !== want.toLowerCase();
-    case 'is at least': return Number(v) >= Number(want); case 'is at most': return Number(v) <= Number(want);
-    default: return true;
+  if (el.type === 'confirm' && el.props.opened_by) {
+    const want = el.props.opened_by.trim().toLowerCase();
+    const pressed = all.some((b) => (b.type === 'button' && (b.props.label ?? '').trim().toLowerCase() === want && get(b, 'pressed') === 'true') || (b.type === 'buttons' && get(b, 'pressed').trim().toLowerCase() === want));
+    if (!pressed) return false;
   }
+  const one = (pre: string): boolean | null => {
+    if (!el.props[`${pre}_el`]) return null;
+    const src = all.find((x) => x.id === el.props[`${pre}_el`]);
+    if (!src) return null;
+    const v = elementValue(src, get); const want = el.props[`${pre}_val`] ?? '';
+    switch (el.props[`${pre}_op`]) {
+      case 'is on': return v === 'on'; case 'is off': return v === 'off';
+      case 'is open': return v === 'open'; case 'is closed': return v === 'closed';
+      case 'was pressed': return v === 'pressed'; case 'was not pressed': return v !== 'pressed';
+      case 'last pressed is': return v.toLowerCase() === want.toLowerCase(); case 'last pressed is not': return v.toLowerCase() !== want.toLowerCase();
+      case 'is': return v.toLowerCase() === want.toLowerCase(); case 'is not': return v.toLowerCase() !== want.toLowerCase();
+      case 'is at least': return Number(v) >= Number(want); case 'is at most': return Number(v) <= Number(want);
+      default: return null;
+    }
+  };
+  const a = one('if'), b = one('if2');
+  if (a === null) return true;
+  if (b === null) return a;
+  return el.props.if_join === 'or' ? a || b : a && b;
 }
 
 export function conditionText(el: El, all: El[]): string {
-  const src = all.find((x) => x.id === el.props.if_el);
-  if (!src || !el.props.if_op) return '';
-  const name = src.props.label || src.props.title || ELEMENT_BY_TYPE[src.type].label;
-  return `"${name}" ${el.props.if_op}${/is (on|off|open|closed)|was (not )?pressed/.test(el.props.if_op) ? '' : ` "${el.props.if_val ?? ''}"`}`;
+  const one = (pre: string) => {
+    const src = all.find((x) => x.id === el.props[`${pre}_el`]);
+    const op = el.props[`${pre}_op`];
+    if (!src || !op) return '';
+    const name = src.props.label || src.props.title || ELEMENT_BY_TYPE[src.type].label;
+    return `"${name}" ${op}${/is (on|off|open|closed)|was (not )?pressed/.test(op) ? '' : ` "${el.props[`${pre}_val`] ?? ''}"`}`;
+  };
+  const a = one('if'), b = one('if2');
+  return a && b ? `${a} ${el.props.if_join === 'or' ? 'or' : 'and'} ${b}` : a;
 }
 
 
@@ -162,6 +188,7 @@ export function buildDesignSpec(component: string, pages: DesignPage[]): { markd
   if (!pages.length) out.push('_No pages designed yet._\n');
   pages.forEach((pg, pi) => {
     out.push(`## Page ${pi + 1}: ${pg.name || 'Untitled'}\n`);
+    const toks = tokensIn(pg.elements); if (toks.length) out.push(`Placeholders (filled with live values in the real UI): ${toks.map((t) => `{${t}}`).join(', ')}.\n`);
     if (pg.surface) out.push(`Surface: ${pg.surface}${pg.width ? `, ${pg.width}px wide` : ''}.\n`);
     if (!pg.elements.length) out.push('_Empty._\n');
     pg.elements.forEach((el, i) => {
@@ -179,6 +206,7 @@ export function buildDesignSpec(component: string, pages: DesignPage[]): { markd
       }
       const name = def.kit ? (def.via ? `${def.via.split(' ')[0]}${def.via.includes('stacked') ? ' (stacked)' : ''} + ${def.kit}` : def.kit) : 'NOT IN THE KIT';
       const cond = conditionText(el, pg.elements);
+      if (p.look) bits.push(`drawn in its ${p.look} state`);
       if (p.col) bits.push(`placed in the ${p.col} column of a two-column layout`);
       const main = p.label || p.title || p.text || '';
       out.push(`${i + 1}. **${name}** (${def.label})${main ? ` "${main}"` : ''}${bits.length ? `: ${bits.join(', ')}` : ''}${def.keys ? `. Keys: ${def.keys}.` : ''}${cond ? ` Shown only if ${cond}.` : ''}`);

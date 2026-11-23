@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import { COND_OPS_BY_TYPE, ELEMENTS, ELEMENT_BY_TYPE, ICONS, buildDesignSpec, cleanConditions, conditionText, iconGlyph, isShown, newEl, parseElements, splitOptions } from '../../shared/uikit.ts';
+import { COND_OPS_BY_TYPE, ELEMENTS, ELEMENT_BY_TYPE, ICONS, buildDesignSpec, cleanConditions, conditionText, iconGlyph, isShown, newEl, parseElements, splitOptions, fillTokens, parseSamples, LOOKS } from '../../shared/uikit.ts';
 import type { El, ElementDef, Prop } from '../../shared/uikit.ts';
 import type { Entity } from '../../shared/schema.ts';
 import { api } from './api.ts';
@@ -9,11 +9,13 @@ import { useProject } from './App.tsx';
 import { useScope } from './scope.tsx';
 import { removeWithUndo } from './undo.ts';
 
-type Theme = { bg: string; fg: string; sub: string; line: string; row: string; accent: string; warn: string; font?: string; pad?: number; rowH?: number; rad?: number; swW?: number; swH?: number; btnH?: number; defW?: number };
+type Theme = { bg: string; fg: string; sub: string; line: string; row: string; accent: string; warn: string; glass?: boolean; font?: string; pad?: number; rowH?: number; rad?: number; swW?: number; swH?: number; btnH?: number; defW?: number };
 const THEMES: Record<string, Theme> = {
   'Hosted black': { bg: '#000000', fg: '#f2f2f4', sub: '#8b8b95', line: '#2a2a30', row: '#101013', accent: '#8478ff', warn: '#f0b34a' },
   // measured from the live notch and the omarchy-ui kit tokens (8-point grid, 16 side margin, 30 rows and buttons, 42x22 switch, radius 10, monospace)
   'Notch': { bg: '#000000', fg: '#f2f2f4', sub: '#8b8b95', line: '#2a2a30', row: '#101013', accent: '#8478ff', warn: '#f0b34a', font: "'JetBrains Mono', 'DejaVu Sans Mono', ui-monospace, monospace", pad: 16, rowH: 30, rad: 10, swW: 42, swH: 22, btnH: 30, defW: 423 },
+  // Weather, Clock, Elsewhen and Monitor are themed and translucent rather than pure black
+  'Translucent': { bg: 'rgba(22,22,30,0.62)', fg: '#f2f2f4', sub: '#a5a5b3', line: 'rgba(255,255,255,0.16)', row: 'rgba(255,255,255,0.07)', accent: '#8478ff', warn: '#f0b34a', glass: true, pad: 16, rowH: 30, rad: 12, swW: 42, swH: 22, btnH: 30, defW: 423 },
   'Light': { bg: '#ffffff', fg: '#1c1c24', sub: '#6b6b7b', line: '#e4e4ea', row: '#f4f4f7', accent: '#5b4cf0', warn: '#a15c07' },
 };
 type Get = (el: El, key: string) => string;
@@ -41,7 +43,7 @@ function BackStrip({ color, active, onBack }: { color: string; active: boolean; 
     style={{ position: 'absolute', top: 0, left: '30%', width: '40%', height: 26, zIndex: 4, display: 'grid', placeItems: 'center', cursor: active ? 'pointer' : 'default', color, fontSize: 15, opacity: hot ? 1 : 0, transition: 'opacity .15s' }}>‹</div>;
 }
 
-function Preview({ els, theme, selected, onSelect, get, set, asUser, width = 340, height, onOpen, onBack, canGoBack }: { els: El[]; theme: Theme; selected: string | null; onSelect: (id: string) => void; get: Get; set: (el: El, key: string, v: string) => void; asUser: boolean; width?: number; height?: number; onOpen?: (page: string) => void; onBack?: () => void; canGoBack?: boolean }) {
+function Preview({ els, theme, selected, onSelect, get, set, asUser, width = 340, height, onOpen, onBack, canGoBack, samples }: { samples?: Record<string, string>; els: El[]; theme: Theme; selected: string | null; onSelect: (id: string) => void; get: Get; set: (el: El, key: string, v: string) => void; asUser: boolean; width?: number; height?: number; onOpen?: (page: string) => void; onBack?: () => void; canGoBack?: boolean }) {
   const t = theme;
   const pad = t.pad ?? 10, rad = t.rad ?? 8, swW = t.swW ?? 30, swH = t.swH ?? 18, knob = swH - 4;
   if (width === 340 && t.defW) width = t.defW;
@@ -55,10 +57,10 @@ function Preview({ els, theme, selected, onSelect, get, set, asUser, width = 340
   const justify = (a: string) => (a === 'right' ? 'flex-end' : a === 'center' ? 'center' : 'flex-start');
 
   const render = (el: El) => {
-    const p = el.props; const g = (k: string) => get(el, k);
+    const p = samples && Object.keys(samples).length ? Object.fromEntries(Object.entries(el.props).map(([k, v]) => [k, fillTokens(v, samples)])) as Record<string, string> : el.props; const g = (k: string) => get(el, k);
     switch (el.type) {
       case 'section': return <div style={{ padding: `12px ${pad}px 4px`, fontSize: 10.5, letterSpacing: 0.6, textTransform: 'uppercase', color: t.sub, fontWeight: 600 }}>{p.title}</div>;
-      case 'header': { const mOn = (g('master') || p.master) === 'on'; return <div style={{ ...row, alignItems: 'flex-start', paddingTop: 4, paddingBottom: p.subtitle ? 2 : 0, fontWeight: 600 }}>{p.back === 'true' && <span style={{ width: 22, color: t.sub, cursor: asUser && canGoBack ? 'pointer' : 'default' }} onClick={act(() => onBack?.())}>‹</span>}{p.icon && <span aria-hidden style={{ filter: 'grayscale(1)', fontSize: 16 }}>{iconGlyph(p.icon)}</span>}<span style={{ flex: 1, textAlign: 'left' }}><div>{p.title}</div>{p.subtitle && <div style={{ fontSize: 9.5, letterSpacing: 1.2, textTransform: 'uppercase', color: t.sub, fontWeight: 500, marginTop: 2 }}>{p.subtitle}</div>}</span>{p.action && <span style={{ color: t.sub, fontWeight: 400 }}>{p.action}</span>}{p.master && p.master !== 'none' && <button type="button" aria-pressed={mOn} aria-label={`${p.title} on or off`} onClick={stop(() => set(el, 'master', mOn ? 'off' : 'on'))} style={{ width: swW, height: swH, borderRadius: swH / 2, background: mOn ? t.accent : t.line, border: 0, position: 'relative', cursor: 'pointer' }}><span style={{ position: 'absolute', top: 2, left: mOn ? swW - knob - 2 : 2, width: knob, height: knob, borderRadius: knob / 2, background: '#fff' }} /></button>}<span style={{ width: 22, textAlign: 'right', color: t.sub }}>{p.close === 'true' ? '×' : ''}</span></div>; }
+      case 'header': { const promptStyle = p.style === 'prompt'; const mOn = (g('master') || p.master) === 'on'; return <div style={{ ...row, alignItems: 'flex-start', paddingTop: 4, paddingBottom: p.subtitle ? 2 : 0, fontWeight: 600 }}>{p.back === 'true' && <span style={{ width: 22, color: t.sub, cursor: asUser && canGoBack ? 'pointer' : 'default' }} onClick={act(() => onBack?.())}>‹</span>}{p.icon && <span aria-hidden style={{ filter: 'grayscale(1)', fontSize: 16 }}>{iconGlyph(p.icon)}</span>}<span style={{ flex: 1, textAlign: 'left', ...(promptStyle ? { color: t.sub, fontWeight: 400 } : {}) }}><div>{p.title}</div>{p.subtitle && <div style={{ fontSize: 9.5, letterSpacing: 1.2, textTransform: 'uppercase', color: t.sub, fontWeight: 500, marginTop: 2 }}>{p.subtitle}</div>}</span>{p.action && <span style={{ color: t.sub, fontWeight: 400 }}>{p.action}</span>}{p.master && p.master !== 'none' && <button type="button" aria-pressed={mOn} aria-label={`${p.title} on or off`} onClick={stop(() => set(el, 'master', mOn ? 'off' : 'on'))} style={{ width: swW, height: swH, borderRadius: swH / 2, background: mOn ? t.accent : t.line, border: 0, position: 'relative', cursor: 'pointer' }}><span style={{ position: 'absolute', top: 2, left: mOn ? swW - knob - 2 : 2, width: knob, height: knob, borderRadius: knob / 2, background: '#fff' }} /></button>}<span style={{ width: 22, textAlign: 'right', color: t.sub }}>{p.close === 'true' ? '×' : ''}</span></div>; }
       case 'row': return <div style={{ ...row, minHeight: p.detail ? 40 : 30, borderLeft: p.current === 'true' ? `3px solid ${t.accent}` : '3px solid transparent', fontWeight: p.current === 'true' ? 600 : 400 }}>{ic(el)}<span style={{ flex: 1 }}><span>{p.label}</span>{p.badge && <span style={{ marginLeft: 6, fontSize: 10, border: `1px solid ${t.line}`, borderRadius: 8, padding: '0 6px', color: t.sub, fontWeight: 400 }}>{p.badge}</span>}{p.detail && <div style={{ fontSize: 10.5, color: t.sub, fontWeight: 400 }}>{p.detail}</div>}</span>{splitOptions(p.buttons).map((b, i) => <span key={'b' + i} style={{ ...btn, display: 'inline-flex', alignItems: 'center', padding: '0 10px', fontSize: 11 }}>{b}</span>)}{splitOptions(p.chips).map((c, i) => <span key={i} style={{ fontSize: 10, border: `1px solid ${t.accent}`, borderRadius: 8, padding: '0 6px', color: t.accent }}>{c}</span>)}{p.value && <span style={{ color: t.sub }}>{p.value}</span>}{p.toggle && p.toggle !== 'none' && (() => { const on = (g('toggle') || p.toggle) === 'on'; return <button type="button" aria-pressed={on} aria-label={p.label} onClick={stop(() => set(el, 'toggle', on ? 'off' : 'on'))} style={{ width: swW, height: swH, borderRadius: swH / 2, background: on ? t.accent : t.line, border: 0, position: 'relative', cursor: 'pointer' }}><span style={{ position: 'absolute', top: 2, left: on ? swW - knob - 2 : 2, width: knob, height: knob, borderRadius: knob / 2, background: '#fff' }} /></button>; })()}{p.clickable === 'true' && <span style={{ color: t.sub }}>›</span>}</div>;
       case 'switch': { const on = g('on') === 'true'; return <div style={row}>{ic(el)}<span style={{ flex: 1 }}>{p.label}</span><button type="button" aria-pressed={on} aria-label={p.label} onClick={stop(() => set(el, 'on', on ? 'false' : 'true'))} style={{ width: swW, height: swH, borderRadius: swH / 2, background: on ? t.accent : t.line, border: 0, position: 'relative', cursor: 'pointer' }}><span style={{ position: 'absolute', top: 2, left: on ? swW - knob - 2 : 2, width: knob, height: knob, borderRadius: knob / 2, background: '#fff', transition: 'left .15s' }} /></button></div>; }
       case 'selector': { const opts = splitOptions(p.options); const a = Number(g('selected')) || 1; return <div style={{ padding: `4px ${pad}px 6px` }}><div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, marginBottom: 4 }}>{ic(el)}{p.label}</div><div role="radiogroup" aria-label={p.label} style={{ display: 'grid', gridAutoFlow: 'column', gridAutoColumns: '1fr', border: `1px solid ${t.line}`, borderRadius: 8, overflow: 'hidden' }}>{opts.map((o, i) => <button key={i} type="button" role="radio" aria-checked={a === i + 1} onClick={stop(() => set(el, 'selected', String(i + 1)))} style={{ padding: '6px 4px', fontSize: 12, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0, border: 0, borderLeft: i ? `1px solid ${t.line}` : 0, cursor: 'pointer', background: a === i + 1 ? t.row : 'transparent', color: a === i + 1 ? t.fg : t.sub, boxShadow: a === i + 1 ? `inset 0 0 0 1px ${t.accent}` : 'none' }}>{o}</button>)}</div></div>; }
@@ -94,7 +96,7 @@ function Preview({ els, theme, selected, onSelect, get, set, asUser, width = 340
   };
 
   return (
-    <div style={{ background: t.bg, color: t.fg, borderRadius: t.rad ? t.rad + 2 : 18, padding: '8px 0 12px', width, minHeight: height, maxWidth: '100%', border: `1px solid ${t.line}`, fontFamily: t.font ?? 'Inter, system-ui, sans-serif', position: 'relative' }}>
+    <div style={{ background: t.bg, color: t.fg, borderRadius: t.rad ? t.rad + 2 : 18, padding: '8px 0 12px', width, minHeight: height, maxWidth: '100%', border: `1px solid ${t.line}`, fontFamily: t.font ?? 'Inter, system-ui, sans-serif', position: 'relative', ...(t.glass ? { backdropFilter: 'blur(18px)', WebkitBackdropFilter: 'blur(18px)' } : {}) }}>
       <BackStrip color={t.sub} active={asUser && !!canGoBack} onBack={onBack} />
       {els.length === 0 && <div style={{ padding: 24, textAlign: 'center', color: t.sub, fontSize: 12 }}>Empty page. Use "+ Add element".</div>}
       {(() => { const one = (el: El) => {
@@ -103,7 +105,7 @@ function Preview({ els, theme, selected, onSelect, get, set, asUser, width = 340
         return (
           <div key={el.id} role="button" tabIndex={0} aria-label={`${ELEMENT_BY_TYPE[el.type].label}: ${el.props.label || el.props.title || el.props.text || ''}${shown ? '' : ' (hidden by its condition right now)'}`}
             onClick={() => (asUser ? (el.props.opens && el.type === 'row' ? onOpen?.(el.props.opens) : undefined) : onSelect(el.id))} onKeyDown={(e) => { if (e.key === 'Enter' && e.target === e.currentTarget) { if (asUser) { if (el.props.opens && el.type === 'row') onOpen?.(el.props.opens); } else onSelect(el.id); } }}
-            style={{ cursor: asUser && !(el.props.opens && el.type === 'row') ? 'default' : 'pointer', outline: selected === el.id ? `2px solid ${t.accent}` : 'none', outlineOffset: -2, borderRadius: 6, opacity: shown ? 1 : 0.32, position: 'relative' }}>
+            style={{ cursor: asUser && !(el.props.opens && el.type === 'row') ? 'default' : 'pointer', outline: selected === el.id ? `2px solid ${t.accent}` : 'none', outlineOffset: -2, borderRadius: 6, opacity: shown ? (el.props.look === 'disabled' ? 0.45 : 1) : 0.32, position: 'relative', ...(el.props.look === 'hover' ? { background: t.row } : el.props.look === 'selected' ? { background: t.row, boxShadow: `inset 3px 0 0 ${t.accent}` } : el.props.look === 'focused' ? { boxShadow: `inset 0 0 0 2px ${t.accent}` } : {}) }}>
             {render(el)}
             {el.props.if_el && <span style={{ position: 'absolute', right: 6, top: 2, fontSize: 9, color: shown ? t.sub : t.warn, border: `1px solid ${shown ? t.line : t.warn}`, borderRadius: 4, padding: '0 4px', background: t.bg }}>if</span>}
           </div>);
@@ -152,27 +154,40 @@ function PropField({ p, value, onChange, pages }: { p: Prop; value: string; onCh
 
 function Condition({ el, earlier, onChange }: { el: El; earlier: El[]; onChange: (props: Record<string, string>) => void }) {
   const sources = earlier.filter((e) => COND_OPS_BY_TYPE[e.type]);
-  const src = sources.find((e) => e.id === el.props.if_el);
-  const ops = src ? COND_OPS_BY_TYPE[src.type] : [];
   const nameOf = (e: El) => e.props.label || e.props.title || ELEMENT_BY_TYPE[e.type].label;
-  const set = (patch: Record<string, string>) => { const next = { ...el.props, ...patch }; for (const k of Object.keys(next)) if (k.startsWith('if_') && !next[k]) delete next[k]; onChange(next); };
+  const set = (patch: Record<string, string>) => { const next = { ...el.props, ...patch }; for (const k of Object.keys(next)) if ((k.startsWith('if_') || k.startsWith('if2_')) && !next[k]) delete next[k]; onChange(next); };
+  const block = (pre: 'if' | 'if2') => {
+    const src = sources.find((e) => e.id === el.props[`${pre}_el`]);
+    const ops = src ? COND_OPS_BY_TYPE[src.type] : [];
+    const op = el.props[`${pre}_op`] ?? '';
+    return (
+      <div className="space-y-2">
+        <div><label htmlFor={`${pre}-src`} className="mb-1 block text-xs text-muted">{pre === 'if' ? 'When this element…' : 'and a second element…'}</label>
+          <select id={`${pre}-src`} value={el.props[`${pre}_el`] ?? ''} onChange={(e) => { const s2 = sources.find((x) => x.id === e.target.value); set({ [`${pre}_el`]: e.target.value, [`${pre}_op`]: s2 ? COND_OPS_BY_TYPE[s2.type][0] : '', [`${pre}_val`]: '' }); }}>
+            <option value="">{pre === 'if' ? 'Always show (no condition)' : 'No second condition'}</option>{sources.map((s2) => <option key={s2.id} value={s2.id}>{nameOf(s2)} ({ELEMENT_BY_TYPE[s2.type].label})</option>)}
+          </select></div>
+        {src && (
+          <div className="grid grid-cols-2 gap-2">
+            <select aria-label="Condition" value={op} onChange={(e) => set({ [`${pre}_op`]: e.target.value })}>{ops.map((o) => <option key={o}>{o}</option>)}</select>
+            {/is (on|off|open|closed)|was (not )?pressed/.test(op) ? <span /> : ['selector', 'dropdown', 'buttons', 'tabs', 'sidenav', 'state'].includes(src.type)
+              ? <select aria-label="Value" value={el.props[`${pre}_val`] ?? ''} onChange={(e) => set({ [`${pre}_val`]: e.target.value })}><option value="">choose…</option>{splitOptions(src.type === 'buttons' ? src.props.labels : src.props.options).map((o) => <option key={o}>{o}</option>)}</select>
+              : <input aria-label="Value" type="number" value={el.props[`${pre}_val`] ?? ''} onChange={(e) => set({ [`${pre}_val`]: e.target.value })} />}
+          </div>)}
+      </div>);
+  };
   return (
     <details className="rounded-lg border border-line p-2" open={!!el.props.if_el}>
       <summary className="cursor-pointer select-none text-sm font-medium">Show only if…{el.props.if_el ? <span className="ml-1 rounded bg-accent-soft px-1 text-xs text-accent">on</span> : null}</summary>
       <div className="mt-2 space-y-2">
-        {sources.length === 0 ? <p className="text-xs text-muted">Nothing above this element can be used yet. A switch, selector, dropdown, stepper, slider or level bar placed earlier on the page can.</p> : (
+        {sources.length === 0 ? <p className="text-xs text-muted">Nothing above this element can be used yet. A switch, selector, dropdown, tab, stepper, slider, button or level bar placed earlier on the page can.</p> : (
           <>
-            <div><label htmlFor="if-src" className="mb-1 block text-xs text-muted">When this element…</label>
-              <select id="if-src" value={el.props.if_el ?? ''} onChange={(e) => { const s = sources.find((x) => x.id === e.target.value); set({ if_el: e.target.value, if_op: s ? COND_OPS_BY_TYPE[s.type][0] : '', if_val: '' }); }}>
-                <option value="">Always show (no condition)</option>{sources.map((s) => <option key={s.id} value={s.id}>{nameOf(s)} ({ELEMENT_BY_TYPE[s.type].label})</option>)}
-              </select></div>
-            {src && (
-              <div className="grid grid-cols-2 gap-2">
-                <select aria-label="Condition" value={el.props.if_op ?? ''} onChange={(e) => set({ if_op: e.target.value })}>{ops.map((o) => <option key={o}>{o}</option>)}</select>
-                {/is (on|off|open|closed)|was (not )?pressed/.test(el.props.if_op ?? '') ? <span /> : ['selector', 'dropdown', 'buttons', 'tabs', 'sidenav', 'state'].includes(src.type)
-                  ? <select aria-label="Value" value={el.props.if_val ?? ''} onChange={(e) => set({ if_val: e.target.value })}><option value="">choose…</option>{splitOptions(src.type === 'buttons' ? src.props.labels : src.props.options).map((o) => <option key={o}>{o}</option>)}</select>
-                  : <input aria-label="Value" type="number" value={el.props.if_val ?? ''} onChange={(e) => set({ if_val: e.target.value })} />}
-              </div>)}
+            {block('if')}
+            {el.props.if_el && (
+              <>
+                <div><label htmlFor="if-join" className="mb-1 block text-xs text-muted">Both must hold, or either?</label>
+                  <select id="if-join" value={el.props.if_join ?? 'and'} onChange={(e) => set({ if_join: e.target.value })}><option value="and">Both (and)</option><option value="or">Either (or)</option></select></div>
+                {block('if2')}
+              </>)}
           </>)}
       </div>
     </details>
@@ -190,9 +205,16 @@ function Inspector({ el, def, earlier, onChange, pages }: { el: El; def: Element
       </div>
       {def.props.map((p) => <PropField key={p.key} p={p} pages={pages} value={el.props[p.key] ?? ''} onChange={(v) => onChange({ ...el.props, [p.key]: v })} />)}
       <div className="mt-3"><label htmlFor={`col-${el.id}`} className="mb-1 block text-xs text-muted">Column (a two-column layout: a run of elements in the left and right columns sit side by side)</label><select id={`col-${el.id}`} value={el.props.col ?? ''} onChange={(e) => { const { col, ...rest } = el.props; void col; onChange(e.target.value ? { ...rest, col: e.target.value } : rest); }}><option value="">Full width</option><option value="left">Left column</option><option value="right">Right column</option></select></div>
+      <div className="mt-3"><label htmlFor={`look-${el.id}`} className="mb-1 block text-xs text-muted">Draw it in a state (for showing hover, focus, selected or disabled)</label><select id={`look-${el.id}`} value={el.props.look ?? ''} onChange={(e) => { const { look, ...rest } = el.props; void look; onChange(e.target.value ? { ...rest, look: e.target.value } : rest); }}><option value="">Normal</option>{LOOKS.map((l) => <option key={l} value={l}>{l}</option>)}</select></div>
       <Condition key={el.id} el={el} earlier={earlier} onChange={onChange} />
     </div>
   );
+}
+
+function CopyToPage({ pages, current, onPick }: { pages: Entity[]; current?: string; onPick: (id: string) => void }) {
+  const others = pages.filter((p) => p.id !== current);
+  if (!others.length) return null;
+  return <select aria-label="Copy to another page" className="!w-auto" value="" onChange={(e) => onPick(e.target.value)}><option value="">Copy to page…</option>{others.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}</select>;
 }
 
 // ---------------------------------------------------------------- the page
@@ -202,6 +224,7 @@ export function DesignPage() {
   const partId = scope.nodeId!;
   const all = useAsync(() => api.list({ project: project.id, kind: 'page' }), [project.id]);
   const comp = useAsync(() => api.get(partId), [partId]);
+  const partsList = useAsync(() => api.list({ project: project.id, kind: 'part' }), [project.id]);
   const issues = useAsync(() => api.list({ project: project.id, kind: 'issue' }), [project.id]);
   const pages = (all.data ?? []).filter((p) => p.data.part_id === partId);
   const [sel, setSel] = useState<string | null>(null);
@@ -216,6 +239,9 @@ export function DesignPage() {
   const [menu, setMenu] = useState<null | 'add' | 'page' | 'gaps' | 'size'>(null); const [query, setQuery] = useState('');
   const [size, setSize] = useState({ w: '340', h: '' });
   const [surface, setSurface] = useState('');
+  const [samples, setSamples] = useState('');
+  const [multi, setMulti] = useState<string[]>([]);
+  const undoRef = useRef<El[][]>([]); const redoRef = useRef<El[][]>([]); const dragFrom = useRef<number | null>(null);
   const [stack, setStack] = useState<string[]>([]);
   const [renaming, setRenaming] = useState<string | null>(null); const [pendingRename, setPendingRename] = useState<string | null>(null);
   const loadedFor = useRef<string | null>(null); const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -225,8 +251,8 @@ export function DesignPage() {
     if (loadedFor.current === page.id) return;
     loadedFor.current = page.id;
     try { setEls(parseElements(page.data.elements)); } catch { setEls([]); }
-    setSelEl(null); setSaved('idle'); setDemo({});
-    setSize({ w: page.data.width || '340', h: page.data.height || '' }); setSurface(page.data.surface || '');
+    setSelEl(null); setMulti([]); setSaved('idle'); setDemo({}); undoRef.current = []; redoRef.current = [];
+    setSize({ w: page.data.width || '340', h: page.data.height || '' }); setSurface(page.data.surface || ''); setSamples(page.data.samples || '');
   }, [page?.id, page?.data.elements]);
   useEffect(() => { if (pendingRename && pages.some((p) => p.id === pendingRename)) { setRenaming(pendingRename); setPendingRename(null); } }, [pendingRename, pages]);
   useEffect(() => { if (!asUser) setStack([]); }, [asUser]);
@@ -234,13 +260,24 @@ export function DesignPage() {
   const get: Get = (el, key) => demo[el.id + key] ?? el.props[key] ?? '';
   const setDemoVal = (el: El, key: string, v: string) => setDemo((d) => ({ ...d, [el.id + key]: v }));
 
-  const change = (next: El[]) => {
+  const commit = (next: El[]) => {
     const clean = cleanConditions(next);
     setEls(clean); setSaved('saving');
     clearTimeout(timer.current);
     const id = page!.id;
     timer.current = setTimeout(async () => { try { await api.update(id, { data: { elements: JSON.stringify(clean) } }, true); setSaved('saved'); } catch (x) { setSaved('error'); setErr((x as Error).message); } }, 600);
   };
+  const change = (next: El[]) => { undoRef.current = [...undoRef.current.slice(-49), els]; redoRef.current = []; commit(next); };
+  const undo = () => { const prev = undoRef.current.pop(); if (!prev || !page) return; redoRef.current.push(els); commit(prev); };
+  const redo = () => { const nxt = redoRef.current.pop(); if (!nxt || !page) return; undoRef.current.push(els); commit(nxt); };
+  useEffect(() => {
+    const k = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement | null)?.tagName; if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      if (!(e.ctrlKey || e.metaKey)) return;
+      if (e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); } else if (e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); }
+    };
+    window.addEventListener('keydown', k); return () => window.removeEventListener('keydown', k);
+  });
 
   const spec = useMemo(() => buildDesignSpec(comp.data?.entity.title ?? '', pages.map((p) => ({ id: p.id, name: p.title, elements: p.id === page?.id ? els : safe(p.data.elements), surface: p.id === page?.id ? surface : p.data.surface, width: p.id === page?.id ? size.w : p.data.width }))), [pages, els, page?.id, comp.data]);
   const selected = els.find((e) => e.id === selEl) ?? null;
@@ -263,7 +300,7 @@ export function DesignPage() {
   async function duplicatePage() {
     if (!page) return; setMenu(null);
     const ids = new Map<string, string>(); const copy = els.map((e) => { const id = uid(); ids.set(e.id, id); return { ...e, id, props: { ...e.props } }; });
-    for (const e of copy) if (e.props.if_el) e.props.if_el = ids.get(e.props.if_el) ?? '';
+    for (const e of copy) { if (e.props.if_el) e.props.if_el = ids.get(e.props.if_el) ?? ''; if (e.props.if2_el) e.props.if2_el = ids.get(e.props.if2_el) ?? ''; }
     try { const p = await api.create({ kind: 'page', project_id: project.id, data: { name: `${page.title} copy`, part_id: partId, elements: JSON.stringify(cleanConditions(copy)) } }); all.reload(); setSel(p.id); loadedFor.current = null; flash('Page duplicated.'); } catch (x) { setErr((x as Error).message); }
   }
   async function rename(name: string) { if (!page || !name.trim() || name === page.title) return; try { await api.update(page.id, { data: { name } }); all.reload(); } catch (x) { setErr((x as Error).message); } }
@@ -276,8 +313,28 @@ export function DesignPage() {
 
   const addEl = (type: string) => { const e = newEl(type); const n = [...els]; n.splice(idx >= 0 ? idx + 1 : n.length, 0, e); change(n); setSelEl(e.id); setMenu(null); setQuery(''); };
   const moveEl = (i: number, d: number) => { const n = [...els]; const j = i + d; if (j < 0 || j >= n.length) return; [n[i], n[j]] = [n[j], n[i]]; change(n); };
-  const removeEl = () => { if (!selected) return; change(els.filter((e) => e.id !== selected.id)); setSelEl(null); };
-  const duplicateEl = () => { if (!selected) return; const c = { ...newEl(selected.type), props: { ...selected.props } }; delete c.props.if_el; delete c.props.if_op; delete c.props.if_val; const n = [...els]; n.splice(idx + 1, 0, c); change(n); setSelEl(c.id); };
+  const targets = () => (multi.length > 1 ? els.filter((e) => multi.includes(e.id)) : selected ? [selected] : []);
+  const removeEl = () => { const t = targets().map((e) => e.id); if (!t.length) return; change(els.filter((e) => !t.includes(e.id))); setSelEl(null); setMulti([]); };
+  const duplicateEl = () => { const t = targets(); if (!t.length) return; const last = Math.max(...t.map((e) => els.indexOf(e))); const copies = t.map((x) => { const c = { ...newEl(x.type), props: { ...x.props } }; delete c.props.if_el; delete c.props.if_op; delete c.props.if_val; delete c.props.if2_el; delete c.props.if2_op; delete c.props.if2_val; delete c.props.if_join; return c; }); const n = [...els]; n.splice(last + 1, 0, ...copies); change(n); setSelEl(copies[0].id); setMulti([]); };
+  const setColumn = (col: string) => { const t = targets().map((e) => e.id); change(els.map((e) => { if (!t.includes(e.id)) return e; const { col: _c, ...rest } = e.props; void _c; return { ...e, props: col ? { ...rest, col } : rest }; })); };
+  const onOutlineClick = (e: El, ev: { ctrlKey: boolean; metaKey: boolean; shiftKey: boolean }) => {
+    if (ev.shiftKey && selEl) { const a = els.findIndex((x) => x.id === selEl), b = els.indexOf(e); const [lo, hi] = a < b ? [a, b] : [b, a]; setMulti(els.slice(lo, hi + 1).map((x) => x.id)); return; }
+    if (ev.ctrlKey || ev.metaKey) { setMulti((m) => { const base = m.length ? m : selEl ? [selEl] : []; return base.includes(e.id) ? base.filter((x) => x !== e.id) : [...base, e.id]; }); return; }
+    setMulti([]); setSelEl(e.id);
+  };
+  const dropOn = (to: number) => { const from = dragFrom.current; dragFrom.current = null; if (from === null || from === to) return; const n = [...els]; const [m] = n.splice(from, 1); n.splice(to, 0, m); change(n); };
+  async function copyElToPage(targetId: string) {
+    const t = targets(); if (!t.length || !targetId) return;
+    try {
+      const tp = pages.find((x) => x.id === targetId); if (!tp) return;
+      const add = t.map((x) => { const c = { ...newEl(x.type), props: { ...x.props } }; delete c.props.if_el; delete c.props.if_op; delete c.props.if_val; delete c.props.if2_el; delete c.props.if2_op; delete c.props.if2_val; delete c.props.if_join; return c; });
+      await api.update(tp.id, { data: { elements: JSON.stringify([...safe(tp.data.elements), ...add]) } }, true); all.reload(); flash(`Copied ${add.length} element${add.length === 1 ? '' : 's'} to "${tp.title}".`);
+    } catch (x) { setErr((x as Error).message); }
+  }
+  async function copyPageTo(partTarget: string) {
+    if (!page || !partTarget) return; setMenu(null);
+    try { const p = await api.create({ kind: 'page', project_id: project.id, data: { name: page.title, part_id: partTarget, elements: JSON.stringify(els), width: size.w, height: size.h, surface } }); void p; flash('Page copied.'); } catch (x) { setErr((x as Error).message); }
+  }
 
   async function copySpec() { try { await navigator.clipboard.writeText(spec.markdown); flash('Spec copied.'); } catch { flash('Could not copy. Use Download.'); } }
   function download() { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([spec.markdown], { type: 'text/markdown' })); a.download = `ui-design-${(comp.data?.entity.title ?? 'component').toLowerCase().replace(/[^a-z0-9]+/g, '-')}.md`; a.click(); URL.revokeObjectURL(a.href); }
@@ -321,6 +378,7 @@ export function DesignPage() {
             <input id="page-name" key={page!.id} defaultValue={page!.title} onBlur={(e) => rename(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }} />
             <div className="mt-2 grid gap-1">
               <Button onClick={duplicatePage}>Duplicate page</Button>
+              <select aria-label="Copy this page to another component" value="" onChange={(e) => copyPageTo(e.target.value)}><option value="">Copy page to component…</option>{(partsList.data ?? []).filter((x) => x.id !== partId).map((x) => <option key={x.id} value={x.id}>{x.title}</option>)}</select>
               <div className="grid grid-cols-2 gap-1"><Button onClick={() => movePage(-1)}>← Move left</Button><Button onClick={() => movePage(1)}>Move right →</Button></div>
               <Button variant="danger" onClick={() => { setMenu(null); setAskDelete(true); }}>Delete page</Button>
             </div>
@@ -331,6 +389,7 @@ export function DesignPage() {
           <Popover open={menu === 'size'} onClose={() => setMenu(null)} className="left-0 top-full mt-1 w-72">
             <div className="mb-2 text-xs text-muted">How big the panel is on screen. Saved with the page.</div>
             <div className="mb-2"><label htmlFor="surface" className="mb-1 block text-xs text-muted">Surface (what this page is)</label><select id="surface" value={surface} onChange={(e) => saveSurface(e.target.value)}><option value="">Not set</option>{SURFACES.map(([n, w]) => <option key={n} value={n}>{n}{w ? ` (${w}px)` : ''}</option>)}</select></div>
+            <div className="mb-2"><label htmlFor="samples" className="mb-1 block text-xs text-muted">Sample values for {'{placeholders}'} in text, e.g. faces=3, user=graveklar</label><input id="samples" value={samples} onChange={(e) => { setSamples(e.target.value); if (page) api.update(page.id, { data: { samples: e.target.value } }, true).catch(() => {}); }} /></div>
             <div className="mb-2 grid grid-cols-4 gap-1">{[['Compact', '280'], ['Panel', '340'], ['Wide', '440'], ['Wider', '560']].map(([l, w]) => <button key={w} onClick={() => saveSize(w, size.h)} className={cx('rounded-md border px-1 py-1.5 text-xs', size.w === w ? 'border-accent bg-accent-soft' : 'border-line hover:bg-sunken')}>{l}<br /><span className="text-muted">{w}</span></button>)}</div>
             <div className="grid grid-cols-2 gap-2">
               <div><label htmlFor="size-w" className="mb-1 block text-xs text-muted">Width (px)</label><input id="size-w" type="number" min={200} max={900} value={size.w} onChange={(e) => saveSize(e.target.value, size.h)} /></div>
@@ -359,6 +418,7 @@ export function DesignPage() {
         <div className="relative flex min-h-[420px] flex-col overflow-hidden rounded-xl border border-line bg-sunken">
           <div className="relative flex items-center gap-2 border-b border-line bg-panel px-3 py-2">
             <Button variant="primary" onClick={() => { setMenu(menu === 'add' ? null : 'add'); setQuery(''); }} aria-haspopup="listbox" aria-expanded={menu === 'add'}>+ Add element</Button>
+            <Button onClick={undo} disabled={!undoRef.current.length} aria-label="Undo" title="Undo (Ctrl+Z)">↶</Button><Button onClick={redo} disabled={!redoRef.current.length} aria-label="Redo" title="Redo (Ctrl+Shift+Z)">↷</Button>
             <span className="text-xs text-muted">{selected ? `Adds after "${nameOf(selected)}"` : 'Adds at the end'}</span>
             <Popover open={menu === 'add'} onClose={() => setMenu(null)} className="left-3 top-full mt-1 w-[min(420px,90%)]">
               <input autoFocus aria-label="Search elements" placeholder="Search elements (selector, slider, card…)" value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && matches[0]) addEl(matches[0].type); }} />
@@ -371,20 +431,21 @@ export function DesignPage() {
               </div>
             </Popover>
           </div>
-          <div className="flex flex-1 justify-center overflow-y-auto p-4">
-            <Preview els={els} theme={THEMES[themeName]} selected={selEl} onSelect={setSelEl} get={get} set={setDemoVal} asUser={asUser} width={Number(size.w) || 340} height={Number(size.h) || undefined} onOpen={openPage} onBack={goBack} canGoBack={stack.length > 0} />
+          <div className="flex flex-1 justify-center overflow-y-auto p-4" style={THEMES[themeName].glass ? { backgroundImage: 'linear-gradient(135deg,#3a5a40,#8a5a3c 55%,#2b3a67)' } : undefined}>
+            <Preview samples={parseSamples(samples)} els={els} theme={THEMES[themeName]} selected={selEl} onSelect={setSelEl} get={get} set={setDemoVal} asUser={asUser} width={Number(size.w) || 340} height={Number(size.h) || undefined} onOpen={openPage} onBack={goBack} canGoBack={stack.length > 0} />
           </div>
         </div>
 
         <div className="flex min-h-0 flex-col gap-3 overflow-hidden">
           <div className="flex max-h-[34%] min-h-[120px] flex-col rounded-xl border border-line bg-panel">
-            <div className="border-b border-line px-3 py-2 text-xs font-semibold uppercase text-muted">Outline ({els.length})</div>
+            <div className="border-b border-line px-3 py-2 text-xs font-semibold uppercase text-muted">Outline ({els.length}) <span className="normal-case font-normal">· drag ⠿ to reorder, Ctrl/Shift-click to select several</span></div>
             <ul className="flex-1 overflow-y-auto p-1">
               {els.length === 0 && <li className="p-2 text-sm text-muted">Nothing on this page yet.</li>}
               {els.map((e, i) => (
-                <li key={e.id} className={cx('flex items-center gap-1 rounded-md', e.id === selEl && 'bg-accent-soft')}>
-                  <button onClick={() => setSelEl(e.id)} className="min-w-0 flex-1 truncate px-2 py-1 text-left text-sm">
-                    <span className={cx(!ELEMENT_BY_TYPE[e.type].kit && 'text-warn')}>{ELEMENT_BY_TYPE[e.type].label}</span> <span className="text-muted">{nameOf(e) !== ELEMENT_BY_TYPE[e.type].label ? `· ${nameOf(e)}` : ''}</span>{e.props.if_el ? <span className="ml-1 rounded bg-sunken px-1 text-[10px] text-muted">if</span> : null}
+                <li key={e.id} draggable onDragStart={() => { dragFrom.current = i; }} onDragOver={(ev) => ev.preventDefault()} onDrop={() => dropOn(i)} className={cx('flex items-center gap-1 rounded-md', (e.id === selEl || multi.includes(e.id)) && 'bg-accent-soft')}>
+                  <span aria-hidden className="cursor-grab px-1 text-muted" title="Drag to reorder">⠿</span>
+                  <button onClick={(ev) => onOutlineClick(e, ev)} aria-pressed={multi.includes(e.id)} className="min-w-0 flex-1 truncate px-2 py-1 text-left text-sm">
+                    <span className={cx(!ELEMENT_BY_TYPE[e.type].kit && 'text-warn')}>{ELEMENT_BY_TYPE[e.type].label}</span> <span className="text-muted">{nameOf(e) !== ELEMENT_BY_TYPE[e.type].label ? `· ${nameOf(e)}` : ''}</span>{e.props.if_el ? <span className="ml-1 rounded bg-sunken px-1 text-[10px] text-muted">if</span> : null}{e.props.col ? <span className="ml-1 rounded bg-sunken px-1 text-[10px] text-muted">{e.props.col}</span> : null}
                   </button>
                   <button className="px-1 text-muted hover:text-fg disabled:opacity-30" disabled={i === 0} onClick={() => moveEl(i, -1)} aria-label={`Move ${nameOf(e)} up`}>↑</button>
                   <button className="px-1 text-muted hover:text-fg disabled:opacity-30" disabled={i === els.length - 1} onClick={() => moveEl(i, 1)} aria-label={`Move ${nameOf(e)} down`}>↓</button>
@@ -392,10 +453,14 @@ export function DesignPage() {
             </ul>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto rounded-xl border border-line bg-panel p-3">
-            {selected ? (
+            {multi.length > 1 ? (
+              <div className="flex flex-col gap-3"><p className="text-sm font-medium">{multi.length} elements selected</p>
+                <div className="flex flex-wrap gap-2"><Button onClick={duplicateEl}>Duplicate</Button><Button onClick={() => setColumn('left')}>Left column</Button><Button onClick={() => setColumn('right')}>Right column</Button><Button onClick={() => setColumn('')}>Full width</Button><Button variant="danger" className="ml-auto" onClick={removeEl}>Remove</Button></div>
+                <CopyToPage pages={pages} current={page?.id} onPick={copyElToPage} /></div>
+            ) : selected ? (
               <>
                 <Inspector key={selected.id} el={selected} def={ELEMENT_BY_TYPE[selected.type]} earlier={els.slice(0, idx)} pages={pages.map((p) => ({ id: p.id, name: p.title }))} onChange={(props) => change(els.map((e) => (e.id === selected.id ? { ...e, props } : e)))} />
-                <div className="mt-4 flex gap-2 border-t border-line pt-3"><Button onClick={duplicateEl}>Duplicate</Button><Button variant="danger" className="ml-auto" onClick={removeEl}>Remove</Button></div>
+                <div className="mt-4 flex flex-wrap gap-2 border-t border-line pt-3"><Button onClick={duplicateEl}>Duplicate</Button><CopyToPage pages={pages} current={page?.id} onPick={copyElToPage} /><Button variant="danger" className="ml-auto" onClick={removeEl}>Remove</Button></div>
               </>) : <p className="text-sm text-muted">Click an element in the preview or the outline to edit it. Selecting nothing shows this hint.</p>}
           </div>
         </div>
