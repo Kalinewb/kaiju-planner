@@ -16,7 +16,7 @@ const label: Prop = { key: 'label', label: 'Label', type: 'text', def: 'Label' }
 const icon: Prop = { key: 'icon', label: 'Placeholder icon', type: 'icon', def: '' };
 
 export const ELEMENTS: ElementDef[] = [
-  { type: 'header', label: 'Page header (back and close)', group: 'Layout', kit: 'UBack', keys: 'Esc goes back one level, then closes', help: 'The one back control and the one close control (UBack, UClose).', props: [{ key: 'title', label: 'Title', type: 'text', def: 'Title' }, { key: 'back', label: 'Show back', type: 'bool', def: 'true' }, { key: 'close', label: 'Show close', type: 'bool', def: 'true' }] },
+  { type: 'header', label: 'Page header (back and close)', group: 'Layout', kit: 'UBack', keys: 'Esc goes back one level, then closes', help: 'The page title and the close control. In the notch the ONLY back control is the invisible strip at the top middle (a chevron shows on hover, Esc is its alias), so panels draw no back button of their own and keep the top-middle zone clear: title on the left, buttons on the right.', props: [{ key: 'title', label: 'Title', type: 'text', def: 'Title' }, { key: 'back', label: 'Draw a back button (against the design rule)', type: 'bool', def: 'false' }, { key: 'close', label: 'Show close', type: 'bool', def: 'true' }] },
   { type: 'section', label: 'Section header', group: 'Layout', kit: 'USection', help: 'A heading that groups what follows (a heading to a screen reader).', props: [{ key: 'title', label: 'Title', type: 'text', def: 'Section' }] },
   { type: 'row', label: 'Row', group: 'Layout', kit: 'URow', keys: 'Enter, Return or Space activates when clickable', help: 'A list item: a glyph, a label, an optional second line, a value on the right and one badge. The kit allows one badge; Face ID draws two chips (Sudo, Lock) by hand.', props: [label, { key: 'detail', label: 'Second line', type: 'text', def: '' }, { key: 'value', label: 'Value (right side)', type: 'text', def: '' }, { key: 'badge', label: 'Badge (a word or two)', type: 'text', def: '' }, icon, { key: 'clickable', label: 'Clickable', type: 'bool', def: 'false' }, { key: 'current', label: 'The chosen entry', type: 'bool', def: 'false' }, { key: 'opens', label: 'When pressed, open page', type: 'page', def: '' }] },
   { type: 'switch', label: 'Switch', group: 'Controls', kit: 'USwitch', via: 'URow', keys: 'Enter, Return or Space toggles', help: 'An on/off setting in a row. The switch itself only carries an accessible name; the visible label is the row\'s.', props: [label, icon, { key: 'on', label: 'On', type: 'bool', def: 'false' }] },
@@ -42,6 +42,7 @@ export const ELEMENTS: ElementDef[] = [
 export const COND_KEYS = ['if_el', 'if_op', 'if_val'] as const;
 export const COND_OPS_BY_TYPE: Record<string, string[]> = {
   switch: ['is on', 'is off'], selector: ['is', 'is not'], dropdown: ['is', 'is not'],
+  button: ['was pressed', 'was not pressed'], buttons: ['last pressed is', 'last pressed is not'],
   stepper: ['is at least', 'is at most'], slider: ['is at least', 'is at most'], level: ['is at least', 'is at most'], ring: ['is at least', 'is at most'], number: ['is at least', 'is at most'],
 };
 
@@ -103,6 +104,8 @@ export function elementValue(el: El, get: (el: El, key: string) => string): stri
   const p = (k: string) => get(el, k);
   switch (el.type) {
     case 'switch': return p('on') === 'true' ? 'on' : 'off';
+    case 'button': return p('pressed') === 'true' ? 'pressed' : '';
+    case 'buttons': return p('pressed');
     case 'selector': case 'dropdown': return splitOptions(el.props.options)[(Number(p('selected')) || 1) - 1] ?? '';
     default: return p('value');
   }
@@ -116,6 +119,8 @@ export function isShown(el: El, all: El[], get: (el: El, key: string) => string)
   const v = elementValue(src, get); const want = el.props.if_val ?? '';
   switch (el.props.if_op) {
     case 'is on': return v === 'on'; case 'is off': return v === 'off';
+    case 'was pressed': return v === 'pressed'; case 'was not pressed': return v !== 'pressed';
+    case 'last pressed is': return v.toLowerCase() === want.toLowerCase(); case 'last pressed is not': return v.toLowerCase() !== want.toLowerCase();
     case 'is': return v.toLowerCase() === want.toLowerCase(); case 'is not': return v.toLowerCase() !== want.toLowerCase();
     case 'is at least': return Number(v) >= Number(want); case 'is at most': return Number(v) <= Number(want);
     default: return true;
@@ -126,7 +131,7 @@ export function conditionText(el: El, all: El[]): string {
   const src = all.find((x) => x.id === el.props.if_el);
   if (!src || !el.props.if_op) return '';
   const name = src.props.label || src.props.title || ELEMENT_BY_TYPE[src.type].label;
-  return `"${name}" ${el.props.if_op}${/is (on|off)/.test(el.props.if_op) ? '' : ` "${el.props.if_val ?? ''}"`}`;
+  return `"${name}" ${el.props.if_op}${/is (on|off)|was (not )?pressed/.test(el.props.if_op) ? '' : ` "${el.props.if_val ?? ''}"`}`;
 }
 
 
@@ -138,7 +143,7 @@ export function buildDesignSpec(component: string, pages: DesignPage[]): { markd
   const pageName = (v: string) => pages.find((x) => x.id === v)?.name ?? pages.find((x) => x.name.toLowerCase() === v.toLowerCase())?.name ?? v;
   const out: string[] = [];
   out.push(`# UI design: ${component}\n`);
-  out.push('> Draft design made in the Kaiju Planner UI builder. Build it from the omarchy-ui kit components named below. An element marked **NOT IN THE KIT** has no kit component yet: do not invent a look for it. Ask the owner, or add it to the kit first. Icons are placeholders (names only), not final artwork.\n');
+  out.push('> Draft design made in the Kaiju Planner UI builder. Build it from the omarchy-ui kit components named below. An element marked **NOT IN THE KIT** has no kit component yet: do not invent a look for it. Ask the owner, or add it to the kit first. Icons are placeholders (names only), not final artwork. Design rule: in the notch the only back control is the invisible strip at the top middle (Esc is its alias), so pages draw no back button and keep that zone clear.\n');
   if (!pages.length) out.push('_No pages designed yet._\n');
   pages.forEach((pg, pi) => {
     out.push(`## Page ${pi + 1}: ${pg.name || 'Untitled'}\n`);

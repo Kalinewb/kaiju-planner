@@ -4,7 +4,7 @@ import { openDb } from '../server/db.ts';
 import { Store } from '../server/store.ts';
 import { Auth, LoginLimiter } from '../server/auth.ts';
 import { createApp } from '../server/app.ts';
-import { ELEMENTS, ICONS, buildDesignSpec, conditionText, isShown, newEl, parseElements } from '../shared/uikit.ts';
+import { ELEMENTS, ICONS, buildDesignSpec, cleanConditions, conditionText, isShown, newEl, parseElements } from '../shared/uikit.ts';
 import type { El } from '../shared/uikit.ts';
 import { checksFromDesign } from '../shared/qa.ts';
 
@@ -113,4 +113,14 @@ test('buttons can sit side by side and open pages; the spec and the QA checks na
   const checks = checksFromDesign('Main', [buttons, open], (v) => (v === 'page-2' ? 'Settings' : v));
   assert.ok(checks.some((c) => /More: does what "More" says and opens "Settings"/.test(c)));
   assert.ok(checks.some((c) => /each button does what its label says/.test(c)));
+});
+
+test('a button can be the thing a condition looks at', () => {
+  const btn = { id: 'b1', type: 'buttons', props: { labels: 'Cancel, Save', kinds: 'quiet, primary' } };
+  const note = { id: 'n1', type: 'tip', props: { text: 'Saved', if_el: 'b1', if_op: 'last pressed is', if_val: 'Save' } };
+  const list = cleanConditions([btn, note]);
+  assert.equal(list[1].props.if_el, 'b1');
+  const get = (el: any, k: string) => (el.id === 'b1' && k === 'pressed' ? 'Save' : el.props[k] ?? '');
+  assert.equal(isShown(note, list, get), true);
+  assert.equal(isShown(note, list, (el: any, k: string) => (el.id === 'b1' && k === 'pressed' ? 'Cancel' : el.props[k] ?? '')), false);
 });
