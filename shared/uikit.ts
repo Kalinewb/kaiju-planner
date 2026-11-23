@@ -103,6 +103,7 @@ export function parseElements(json: string | undefined): El[] {
       props[p.key] = val;
     }
     if (e.props && typeof (e.props as any).col === 'string' && ['left', 'right'].includes((e.props as any).col)) props.col = (e.props as any).col;
+    if (typeof (e.props as any)?.colw === 'string' && /^\d{2}$/.test((e.props as any).colw)) props.colw = (e.props as any).colw;
     if (typeof (e.props as any)?.look === 'string' && LOOKS.includes((e.props as any).look)) props.look = (e.props as any).look;
     for (const k of COND_KEYS) { const val = (e.props as Record<string, unknown> | undefined)?.[k]; if (typeof val === 'string' && val) props[k] = val.slice(0, 200); }
     return { id: typeof e.id === 'string' && e.id ? e.id.slice(0, 20) : Math.random().toString(36).slice(2, 9), type: def.type, props };
@@ -207,7 +208,7 @@ export function buildDesignSpec(component: string, pages: DesignPage[]): { markd
       const name = def.kit ? (def.via ? `${def.via.split(' ')[0]}${def.via.includes('stacked') ? ' (stacked)' : ''} + ${def.kit}` : def.kit) : 'NOT IN THE KIT';
       const cond = conditionText(el, pg.elements);
       if (p.look) bits.push(`drawn in its ${p.look} state`);
-      if (p.col) bits.push(`placed in the ${p.col} column of a two-column layout`);
+      if (p.col) bits.push(`placed in the ${p.col} column of a two-column layout${p.colw ? ` (left column ${p.colw}% wide)` : ''}`);
       const main = p.label || p.title || p.text || '';
       out.push(`${i + 1}. **${name}** (${def.label})${main ? ` "${main}"` : ''}${bits.length ? `: ${bits.join(', ')}` : ''}${def.keys ? `. Keys: ${def.keys}.` : ''}${cond ? ` Shown only if ${cond}.` : ''}`);
       if (!def.kit) gaps.set(def.label, [...(gaps.get(def.label) ?? []), `${pg.name} #${i + 1}${p.label ? ` "${p.label}"` : ''}`]);
