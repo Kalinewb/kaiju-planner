@@ -44,13 +44,16 @@ export function checksFromDesign(pageName: string, els: El[], nameOfPage: (v: st
       case 'switch': out.push(`${where}: turns on and off, and the change sticks`); break;
       case 'stepper': out.push(`${where}: stays between ${p.from} and ${p.to}`); break;
       case 'slider': out.push(`${where}: moves across its range and shows the value`); break;
-      case 'dropdown': out.push(`${where}: opens, picks one of ${splitOptions(p.options).join(', ')}, closes with Esc`); break;
+      case 'dropdown': out.push(`${where}: opens${p.inline === 'true' ? ' a list under the row' : ''}, picks one of ${splitOptions(p.options).join(', ')}, closes with Esc`); break;
       case 'field': out.push(`${where}: Enter saves, Esc reverts an unsaved change`); break;
       case 'button': out.push(`${where}: does what "${p.label}" says${p.opens ? ` and opens "${nameOfPage(p.opens)}"` : ''}`); break;
       case 'buttons': out.push(`${where}: each button does what its label says`); break;
       case 'row': if (p.toggle && p.toggle !== 'none') out.push(`${where}: the switch turns on and off and the change sticks`); if (p.buttons) out.push(`${where}: each of ${splitOptions(p.buttons).join(', ')} does what its label says`); if (p.clickable === 'true') out.push(`${where}: Enter, Space and a click all activate it${p.opens ? ` and open "${nameOfPage(p.opens)}"` : ''}`); break;
       case 'notice': case 'toast': out.push(`${where}: appears when it should and reads correctly`); break;
       case 'tabs': case 'sidenav': out.push(`${where}: choosing each of ${splitOptions(p.options).join(', ')} shows only that one's content`); break;
+      case 'multipick': out.push(`${where}: opens its list, each of ${splitOptions(p.options).join(', ')} ticks on and off, and the row shows what is picked`); break;
+      case 'keybind': out.push(`${where}: pressing it records a new combination, Esc cancels, and a clash names the other use`); break;
+      case 'section': if (p.fold && p.fold !== 'no') out.push(`${where}: folds open and closed and hides what is under it`); break;
       case 'disclosure': out.push(`${where}: opens and closes, and the text inside reads correctly`); break;
       case 'state': out.push(`${where}: each of ${splitOptions(p.options).join(', ')} shows the right elements and hides the others`); break;
       case 'card': if (p.toggle && p.toggle !== 'none') out.push(`${where}: the switch turns on and off and the change sticks`); break;

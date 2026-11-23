@@ -4,14 +4,14 @@ import { openDb } from '../server/db.ts';
 import { Store } from '../server/store.ts';
 import { Auth, LoginLimiter } from '../server/auth.ts';
 import { createApp } from '../server/app.ts';
-import { ELEMENTS, ICONS, buildDesignSpec, fillTokens, parseSamples, cleanConditions, conditionText, isShown, newEl, parseElements } from '../shared/uikit.ts';
+import { ELEMENTS, ICONS, buildDesignSpec, fillTokens, parseSamples, foldedIds, cleanConditions, conditionText, isShown, newEl, parseElements } from '../shared/uikit.ts';
 import type { El } from '../shared/uikit.ts';
 import { checksFromDesign } from '../shared/qa.ts';
 
 test('the element catalog matches the UI kit and flags what the kit lacks', () => {
   const kit = ELEMENTS.filter((e) => e.kit && e.type !== 'state').map((e) => e.kit).sort();
   assert.deepEqual(kit, ['UBack', 'UButton', 'UButton', 'UConfirmSheet', 'UEmpty', 'UField', 'ULevel', 'UNotice', 'UPick', 'URing', 'URow', 'USection', 'USegmented', 'USegmented', 'UStepper', 'UStepper', 'USwitch', 'UTip', 'UToast']);
-  assert.deepEqual(ELEMENTS.filter((e) => !e.kit).map((e) => e.type).sort(), ['calendar', 'card', 'chart', 'custom', 'disclosure', 'readout', 'sidenav', 'slider', 'status', 'text', 'tiles', 'viewfinder']);
+  assert.deepEqual(ELEMENTS.filter((e) => !e.kit).map((e) => e.type).sort(), ['calendar', 'card', 'chart', 'custom', 'disclosure', 'divider', 'keybind', 'multipick', 'readout', 'sidenav', 'slider', 'status', 'text', 'tiles', 'viewfinder', 'widgets']);
   // every gap that exists in the owner's plugins says where it was found
   for (const e of ELEMENTS.filter((x) => !x.kit && !['custom', 'slider'].includes(x.type))) assert.ok(e.seenIn?.length, e.type);
   assert.ok(ICONS.length >= 24 && new Set(ICONS.map((i) => i.name)).size === ICONS.length);
@@ -184,4 +184,21 @@ test('placeholders are listed in the spec and filled from sample values; looks a
   assert.match(md, /Placeholders .*\{faces\}/); assert.match(md, /hover state/);
   assert.equal(fillTokens('{faces} faces', parseSamples('faces=3')), '3 faces');
   assert.equal(fillTokens('{nope}', {}), '{nope}');
+});
+
+test('a folding section hides what is under it until the next heading; multi-pick drives conditions', () => {
+  const list = cleanConditions([
+    { id: 's', type: 'section', props: { title: 'Advanced', fold: 'closed' } },
+    { id: 'a', type: 'row', props: { label: 'x' } },
+    { id: 's2', type: 'section', props: { title: 'Next' } },
+    { id: 'b', type: 'row', props: { label: 'y' } },
+    { id: 'm', type: 'multipick', props: { label: 'At rest', options: 'Time, Date, Battery', selected: 'Time' } },
+    { id: 'c', type: 'text', props: { text: 'z', if_el: 'm', if_op: 'includes', if_val: 'Battery' } },
+  ]);
+  const get = (v: Record<string, string>) => (el: any, k: string) => v[el.id + k] ?? el.props[k] ?? '';
+  assert.deepEqual([...foldedIds(list, get({}))], ['a']);
+  assert.deepEqual([...foldedIds(list, get({ sopen: 'true' }))], []);
+  assert.equal(list[5].props.if_el, 'm');
+  assert.equal(isShown(list[5], list, get({})), false);
+  assert.equal(isShown(list[5], list, get({ mselected: 'Time, Battery' })), true);
 });
