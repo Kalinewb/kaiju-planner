@@ -146,3 +146,10 @@ test('the spec names a page surface and its width', () => {
   const md = buildDesignSpec('Face', [{ name: 'Settings', elements: [], surface: 'Face-size panel', width: '370' }]).markdown;
   assert.match(md, /Surface: Face-size panel, 370px wide/);
 });
+
+test('an element can sit in the left or right column, and other values are dropped', () => {
+  const json = JSON.stringify([{ id: 'a', type: 'sidenav', props: { col: 'left' } }, { id: 'b', type: 'text', props: { col: 'right' } }, { id: 'c', type: 'text', props: { col: 'middle' } }]);
+  const list = parseElements(json);
+  assert.deepEqual(list.map((e) => e.props.col), ['left', 'right', undefined]);
+  assert.match(buildDesignSpec('X', [{ name: 'P', elements: list }]).markdown, /left column of a two-column layout/);
+});

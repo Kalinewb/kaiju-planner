@@ -97,7 +97,7 @@ function Preview({ els, theme, selected, onSelect, get, set, asUser, width = 340
     <div style={{ background: t.bg, color: t.fg, borderRadius: t.rad ? t.rad + 2 : 18, padding: '8px 0 12px', width, minHeight: height, maxWidth: '100%', border: `1px solid ${t.line}`, fontFamily: t.font ?? 'Inter, system-ui, sans-serif', position: 'relative' }}>
       <BackStrip color={t.sub} active={asUser && !!canGoBack} onBack={onBack} />
       {els.length === 0 && <div style={{ padding: 24, textAlign: 'center', color: t.sub, fontSize: 12 }}>Empty page. Use "+ Add element".</div>}
-      {els.map((el) => {
+      {(() => { const one = (el: El) => {
         const shown = isShown(el, els, get);
         if (!shown && asUser) return null;
         return (
@@ -107,7 +107,7 @@ function Preview({ els, theme, selected, onSelect, get, set, asUser, width = 340
             {render(el)}
             {el.props.if_el && <span style={{ position: 'absolute', right: 6, top: 2, fontSize: 9, color: shown ? t.sub : t.warn, border: `1px solid ${shown ? t.line : t.warn}`, borderRadius: 4, padding: '0 4px', background: t.bg }}>if</span>}
           </div>);
-      })}
+      }; const out: ReactNode[] = []; for (let i = 0; i < els.length; ) { if (els[i].props.col) { const grp: El[] = []; while (i < els.length && els[i].props.col) grp.push(els[i++]); const L = grp.filter((x) => x.props.col === 'left'), R = grp.filter((x) => x.props.col === 'right'); out.push(<div key={'g' + grp[0].id} style={{ display: 'grid', gridTemplateColumns: '38% 1fr', gap: 8 }}><div>{L.map(one)}</div><div>{R.map(one)}</div></div>); } else out.push(one(els[i++])); } return out; })()}
     </div>
   );
 }
@@ -189,6 +189,7 @@ function Inspector({ el, def, earlier, onChange, pages }: { el: El; def: Element
         {def.seenIn?.length ? <p className="mt-1 text-xs text-muted">Already built by hand in: {def.seenIn.join(', ')}.</p> : null}
       </div>
       {def.props.map((p) => <PropField key={p.key} p={p} pages={pages} value={el.props[p.key] ?? ''} onChange={(v) => onChange({ ...el.props, [p.key]: v })} />)}
+      <div className="mt-3"><label htmlFor={`col-${el.id}`} className="mb-1 block text-xs text-muted">Column (a two-column layout: a run of elements in the left and right columns sit side by side)</label><select id={`col-${el.id}`} value={el.props.col ?? ''} onChange={(e) => { const { col, ...rest } = el.props; void col; onChange(e.target.value ? { ...rest, col: e.target.value } : rest); }}><option value="">Full width</option><option value="left">Left column</option><option value="right">Right column</option></select></div>
       <Condition key={el.id} el={el} earlier={earlier} onChange={onChange} />
     </div>
   );
