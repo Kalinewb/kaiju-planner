@@ -32,6 +32,13 @@ function Popover({ open, onClose, children, className }: { open: boolean; onClos
 }
 
 // ---------------------------------------------------------------- preview
+/** The notch's only back control: an invisible strip at the top middle. A chevron shows only while the pointer is over it. */
+function BackStrip({ color, active, onBack }: { color: string; active: boolean; onBack?: () => void }) {
+  const [hot, setHot] = useState(false);
+  return <div role="button" aria-label="Back (top-middle strip, shown on hover)" title={active ? 'Back' : 'Back: the invisible top-middle strip. In "Preview as user" it goes back.'} onMouseEnter={() => setHot(true)} onMouseLeave={() => setHot(false)} onClick={(e) => { e.stopPropagation(); if (active) onBack?.(); }}
+    style={{ position: 'absolute', top: 0, left: '30%', width: '40%', height: 26, zIndex: 4, display: 'grid', placeItems: 'center', cursor: active ? 'pointer' : 'default', color, fontSize: 15, opacity: hot ? 1 : 0, transition: 'opacity .15s' }}>‹</div>;
+}
+
 function Preview({ els, theme, selected, onSelect, get, set, asUser, width = 340, height, onOpen, onBack, canGoBack }: { els: El[]; theme: Theme; selected: string | null; onSelect: (id: string) => void; get: Get; set: (el: El, key: string, v: string) => void; asUser: boolean; width?: number; height?: number; onOpen?: (page: string) => void; onBack?: () => void; canGoBack?: boolean }) {
   const t = theme;
   const row: CSSProperties = { display: 'flex', alignItems: 'center', gap: 8, minHeight: 30, padding: '0 10px', fontSize: 12 };
@@ -73,7 +80,8 @@ function Preview({ els, theme, selected, onSelect, get, set, asUser, width = 340
   };
 
   return (
-    <div style={{ background: t.bg, color: t.fg, borderRadius: 18, padding: '8px 0 12px', width, minHeight: height, maxWidth: '100%', border: `1px solid ${t.line}`, fontFamily: 'Inter, system-ui, sans-serif' }}>
+    <div style={{ background: t.bg, color: t.fg, borderRadius: 18, padding: '8px 0 12px', width, minHeight: height, maxWidth: '100%', border: `1px solid ${t.line}`, fontFamily: 'Inter, system-ui, sans-serif', position: 'relative' }}>
+      <BackStrip color={t.sub} active={asUser && !!canGoBack} onBack={onBack} />
       {els.length === 0 && <div style={{ padding: 24, textAlign: 'center', color: t.sub, fontSize: 12 }}>Empty page. Use "+ Add element".</div>}
       {els.map((el) => {
         const shown = isShown(el, els, get);
