@@ -9,7 +9,7 @@ import { Kanban, Roadmap, Dependencies } from './planning.tsx';
 import { Assistant } from './assistant.tsx';
 import { NeedsYou } from './needs.tsx';
 import { IssuesPage } from './issues.tsx';
-import { DesignPage } from './designer.tsx';
+import { DesignTab } from './design-tab.tsx';
 import { QaPage } from './qa.tsx';
 import { LooksPage } from './looks.tsx';
 import { CommandPalette } from './palette.tsx';
@@ -55,6 +55,8 @@ function Shell() {
   const [open, setOpen] = useState(false);
   const loc = useLocation();
   useEffect(() => setOpen(false), [loc.pathname]);
+  // A new page always starts at the top, not where the last page was scrolled to.
+  useEffect(() => { window.scrollTo(0, 0); }, [loc.pathname]);
   const m = /^\/p\/([^/]+)/.exec(loc.pathname);
   const pid = m?.[1];
   const project = useAsync(() => (pid ? api.get(pid) : Promise.resolve(null)), [pid]);
@@ -63,7 +65,7 @@ function Shell() {
   useEffect(() => { const h = (e: KeyboardEvent) => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); setSearchOpen((o) => !o); } }; window.addEventListener('keydown', h); return () => window.removeEventListener('keydown', h); }, []);
   return (
     <div className="flex min-h-full">
-      <aside className={cx('fixed inset-y-0 left-0 z-40 w-64 shrink-0 overflow-y-auto border-r border-line bg-panel p-3 md:static md:block', open ? 'block' : 'hidden')}>
+      <aside className={cx('fixed inset-y-0 left-0 z-40 w-64 shrink-0 flex-col overflow-y-auto border-r border-line bg-panel p-3 md:sticky md:top-0 md:flex md:h-screen', open ? 'flex' : 'hidden')}>
         <div className="mb-4 flex items-center gap-2 px-1"><Logo /><span className="font-semibold">Kaiju Planner</span></div>
         <nav className="space-y-0.5" aria-label="Main">
           <NavLink to="/" end className={linkCls}>Overview</NavLink>
@@ -80,7 +82,8 @@ function Shell() {
             <NavLink to={`/p/${pid}/looks`} className={linkCls}>Looks</NavLink>
             <NavLink to={`/p/${pid}/qa`} className={linkCls}>QA</NavLink>
             <NavLink to={`/p/${pid}/structure`} className={linkCls}>Structure</NavLink>
-            <div className="pb-1 pl-1"><SidebarTree pid={pid} /></div>
+            {/* The tree scrolls on its own so the links below it stay in reach. */}
+            <div className="mb-1 ml-1 max-h-[38vh] overflow-y-auto overscroll-contain rounded-lg border border-line/60 py-1 pr-1"><SidebarTree pid={pid} /></div>
             <NavLink to={`/p/${pid}/definition`} className={linkCls}>Project Definition</NavLink>
             <details className="border-t border-line pt-2" open={/^\/p\/[^/]+\/(features|roadmap|tasks|decisions|docs)/.test(loc.pathname)}>
               <summary className="cursor-pointer select-none px-3 py-1 text-xs font-semibold uppercase tracking-wide text-muted">Whole project</summary>
@@ -168,9 +171,9 @@ export function App() {
             <Route path="docs" element={<Collection kind="doc" />} />
             <Route path="debt" element={<Collection kind="debt" />} />
             <Route path="issues" element={<IssuesPage />} />
-            <Route path="design" element={<DesignPage />} />
+            <Route path="design" element={<DesignTab />} />
             <Route path="qa" element={<QaPage />} />
-            <Route path="looks" element={<LooksPage />} />
+            <Route path="looks" element={<Navigate to="../design?view=real" replace />} />
           </Route>
           <Route path="features" element={<FeaturesPage />} />
           <Route path="features/new" element={<FeatureWizard />} />

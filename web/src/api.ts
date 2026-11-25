@@ -28,7 +28,7 @@ async function req<T>(method: string, path: string, body?: unknown, silent = fal
 }
 
 export interface Summary {
-  features: number; featuresCompleted: number; featuresInDevelopment: number; featuresPlanned: number; featuresIdeas: number;
+  features: number; featuresCompleted: number; featuresInDevelopment: number; featuresPlanned: number; featuresIdeas: number; featuresAwaitingApproval: number; issuesOpen: number;
   tasksOpen: number; tasksTotal: number; parts: number; progress: number;
   openQuestions: { id: string; kind: string; title: string; field: string; flag: string }[];
   recent: HistoryItem[];

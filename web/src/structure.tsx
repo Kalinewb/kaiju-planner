@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { PART_STATUSES, KINDS } from '../../shared/schema.ts';
 import type { Entity } from '../../shared/schema.ts';
@@ -240,6 +240,8 @@ export function NodeLayout() {
   const d = useStructureData(project.id);
   const [inside, setInside] = useState(readInside);
   const [editing, setEditing] = useState(false);
+  const loc = useLocation();
+  const [moreOpen, setMoreOpen] = useState(() => { try { return localStorage.getItem('kaiju-more-tabs') === '1'; } catch { return false; } });
   const setInsidePersist = (v: boolean) => { setInside(v); try { localStorage.setItem('kaiju-include-inside', v ? '1' : '0'); } catch { /* ignore */ } };
   const node = d.P.find((p) => p.id === nid);
   const base = `/p/${project.id}`;
@@ -256,6 +258,8 @@ export function NodeLayout() {
   const nF = d.F.filter((f) => f.status !== 'Rejected' && inScope(f.data.part_id)).length;
   const nT = d.T.filter((t) => inScope(t.data.part_id || d.F.find((f) => f.id === t.data.feature_id)?.data.part_id || '')).length;
   const nI = d.I.filter((i) => ['Open', 'Confirmed', 'In progress'].includes(i.status) && inScope(i.data.part_id || d.F.find((f) => f.id === i.data.feature_id)?.data.part_id || '')).length;
+  const onMoreTab = /\/(tasks|decisions|docs|debt)$/.test(loc.pathname);
+  const showMore = moreOpen || onMoreTab;
   const tab = (to: string, label: string, count?: number) => (
     <NavLink key={to} to={`${scope.base}${to}`} end={to === ''} className={({ isActive }) => cx('whitespace-nowrap border-b-2 px-3 py-2 text-sm', isActive ? 'border-accent font-medium text-accent' : 'border-transparent text-muted hover:text-fg')}>
       {label}{count !== undefined && <span className="ml-1 text-xs text-muted">{count}</span>}
@@ -276,7 +280,10 @@ export function NodeLayout() {
         </div>
       </div>
       <div className="mb-5 flex overflow-x-auto border-b border-line" role="tablist">
-        {tab('', 'Overview')}{tab('/features', 'Features', nF)}{tab('/issues', 'Issues', nI)}{tab('/design', 'Design', d.PG.filter((p) => p.data.part_id === node.id).length)}{tab('/looks', 'Looks', d.SH.filter((p) => p.data.part_id === node.id).length)}{tab('/qa', 'QA', d.QA.filter((p) => scope.ids.has(p.data.part_id)).length)}{tab('/tasks', 'Tasks', nT)}{tab('/roadmap', 'Roadmap')}{tab('/decisions', 'Decisions')}{tab('/docs', 'Docs')}{tab('/debt', 'Debt')}
+        {tab('', 'Overview')}{tab('/features', 'Features', nF)}{tab('/issues', 'Issues', nI)}{tab('/design', 'Design', d.PG.filter((p) => p.data.part_id === node.id).length + d.SH.filter((p) => p.data.part_id === node.id).length)}{tab('/qa', 'QA', d.QA.filter((p) => scope.ids.has(p.data.part_id)).length)}{tab('/roadmap', 'Roadmap')}
+        {/* The working records (mostly kept for Claude) sit behind More, so the everyday tabs stay few. */}
+        <button className={cx('ml-auto whitespace-nowrap border-b-2 border-transparent px-3 py-2 text-sm', showMore ? 'text-fg' : 'text-muted hover:text-fg')} aria-expanded={showMore} onClick={() => setMoreOpen((o) => { try { localStorage.setItem('kaiju-more-tabs', o ? '0' : '1'); } catch { /* ignore */ } return !o; })}>More {showMore ? '▴' : '▾'}</button>
+        {showMore && <>{tab('/tasks', 'Tasks', nT)}{tab('/decisions', 'Decisions')}{tab('/docs', 'Docs')}{tab('/debt', 'Debt')}</>}
       </div>
       <Outlet context={{ ...ctx, node, parts: d.P, features: d.F, tasks: d.T, reloadStructure: d.reload }} />
       {editing && <ComponentDrawer pid={project.id} parts={d.P} target={node} onClose={() => setEditing(false)} onDone={() => { setEditing(false); d.reload(); }} />}
@@ -352,19 +359,21 @@ export function SidebarTree({ pid }: { pid: string }) {
   const parts = useAsync(() => api.list({ project: pid, kind: 'part' }), [pid, loc.pathname]);
   const [closed, setClosed] = useState<Set<string>>(new Set());
   const tree = useMemo(() => buildTree(parts.data ?? []), [parts.data]);
-  useEffect(() => { /* keep collapsed state across navigation */ }, [loc.pathname]);
+  const box = useRef<HTMLUListElement>(null);
+  // Keep the open component in view inside the tree's own scroll area.
+  useEffect(() => { box.current?.querySelector('[aria-current="page"]')?.scrollIntoView({ block: 'nearest' }); }, [loc.pathname, parts.data]);
   if (!parts.data?.length) return <p className="px-3 py-1 text-xs text-muted">No components yet</p>;
   const render = (n: TreeNode): React.ReactNode => {
     const shut = closed.has(n.part.id);
     return (
       <li key={n.part.id}>
         <div className="flex items-center" style={{ paddingLeft: n.depth * 12 }}>
-          <button className={cx('h-6 w-5 shrink-0 text-xs text-muted', !n.children.length && 'invisible')} onClick={() => setClosed((s) => { const x = new Set(s); if (x.has(n.part.id)) x.delete(n.part.id); else x.add(n.part.id); return x; })} aria-label={shut ? `Expand ${n.part.title}` : `Collapse ${n.part.title}`} aria-expanded={!shut}>{shut ? '▸' : '▾'}</button>
+          <button className={cx('h-7 w-6 shrink-0 rounded text-xs text-muted hover:bg-sunken', !n.children.length && 'invisible')} onClick={() => setClosed((s) => { const x = new Set(s); if (x.has(n.part.id)) x.delete(n.part.id); else x.add(n.part.id); return x; })} aria-label={shut ? `Expand ${n.part.title}` : `Collapse ${n.part.title}`} aria-expanded={!shut}>{shut ? '▸' : '▾'}</button>
           <NavLink to={`/p/${pid}/n/${n.part.id}`} className={({ isActive }) => cx('flex min-w-0 flex-1 items-center gap-1.5 truncate rounded-md px-2 py-1 text-sm', isActive ? 'bg-accent-soft font-medium text-accent' : 'hover:bg-sunken')} title={`${n.part.data.type || 'Component'}: ${n.part.title}`}><Dot status={n.part.status} /><span className="truncate">{n.part.title}</span></NavLink>
         </div>
         {!shut && n.children.length > 0 && <ul>{n.children.map(render)}</ul>}
       </li>
     );
   };
-  return <ul>{tree.map(render)}</ul>;
+  return <ul ref={box}>{tree.map(render)}</ul>;
 }

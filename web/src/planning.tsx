@@ -76,7 +76,11 @@ export function Roadmap() {
   const [err, setErr] = useState('');
   const [askPhase, setAskPhase] = useState<{ p: Entity; to: string } | null>(null);
   const reload = () => { phases.reload(); links.reload(); };
-  const list = (phases.data ?? []).filter((p) => !scope.ids || scope.ids.has(p.data.part_id));
+  // In a component: its own phases, plus project-wide phases that hold some of its features or tasks.
+  const phaseHasScoped = (pid: string) => (links.data ?? []).some((l) => l.type === 'phase_feature' && l.to_id === pid && scope.ids!.has((feats.data ?? []).find((f) => f.id === l.from_id)?.data.part_id ?? ''))
+    || (tasks.data ?? []).some((t) => t.data.phase_id === pid && scope.ids!.has(t.data.part_id || (feats.data ?? []).find((f) => f.id === t.data.feature_id)?.data.part_id || ''));
+  const list = (phases.data ?? []).filter((p) => !scope.ids || scope.ids.has(p.data.part_id) || (!p.data.part_id && phaseHasScoped(p.id)));
+  const projectWide = (phases.data ?? []).filter((p) => !p.data.part_id).length;
   async function swap(i: number, d: number) {
     const ids = list.map((p) => p.id); [ids[i], ids[i + d]] = [ids[i + d], ids[i]];
     await fetch('/api/reorder', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ids }) });
@@ -88,11 +92,15 @@ export function Roadmap() {
     <>
       <PageHeader title="Roadmap" help="Your phases, in the order you choose. Dates appear only if you enter them." actions={<Button variant="primary" onClick={() => setEdit('new')}>Add phase</Button>} />
       {err && <div role="alert" className="mb-3 text-bad">{err}</div>}
-      {phases.data && list.length === 0 && <Empty>No phases yet. Create your own, for example "Foundation" or "First version". They are not preset.</Empty>}
+      {phases.data && list.length === 0 && (scope.ids && projectWide
+        ? <Empty>Nothing from this component is on the roadmap yet. The project has {projectWide} phase{projectWide === 1 ? '' : 's'} on its <Link className="text-accent underline" to={`${scope.projectBase}/roadmap`}>whole-project roadmap</Link>: add this component's features to one there, or add a phase just for this component.</Empty>
+        : <Empty>No phases yet. Create your own, for example "Foundation" or "First version". They are not preset.</Empty>)}
       <div className="space-y-4">
         {list.map((p, i) => {
-          const fs = (links.data ?? []).filter((l) => l.type === 'phase_feature' && l.to_id === p.id).map((l) => ({ l, f: (feats.data ?? []).find((f) => f.id === l.from_id) })).filter((x) => x.f);
-          const pTasks = (tasks.data ?? []).filter((t) => t.data.phase_id === p.id);
+          // On a component's page, a project-wide phase shows only that component's part of it.
+          const mine = (partId: string) => !scope.ids || !!p.data.part_id || scope.ids.has(partId);
+          const fs = (links.data ?? []).filter((l) => l.type === 'phase_feature' && l.to_id === p.id).map((l) => ({ l, f: (feats.data ?? []).find((f) => f.id === l.from_id) })).filter((x) => x.f && mine(x.f.data.part_id));
+          const pTasks = (tasks.data ?? []).filter((t) => t.data.phase_id === p.id && mine(t.data.part_id || (feats.data ?? []).find((f) => f.id === t.data.feature_id)?.data.part_id || ''));
           const pDocs = (docs.data ?? []).filter((d) => d.data.phase_id === p.id);
           const total = fs.length + pTasks.length;
           const done = fs.filter((x) => x.f!.status === 'Completed').length + pTasks.filter((t) => t.status === 'Completed').length;

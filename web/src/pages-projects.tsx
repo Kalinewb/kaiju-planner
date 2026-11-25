@@ -12,8 +12,8 @@ import { buildTree, nodeStats } from '../../shared/tree.ts';
 import { TypeBadge } from './ui.tsx';
 import { QuickAdd } from './quickadd.tsx';
 
-function Stat({ label, value }: { label: string; value: number | string }) {
-  return <div><div className="text-xl font-semibold">{value}</div><div className="text-xs text-muted">{label}</div></div>;
+function Stat({ label, value, hint }: { label: string; value: number | string; hint?: string }) {
+  return <div><div className="text-xl font-semibold">{value}</div><div className="text-xs text-muted">{label}</div>{hint && <div className="mt-1 text-xs text-warn">{hint}</div>}</div>;
 }
 
 function ProjectCard({ p, s }: { p: Entity; s: Summary }) {
@@ -24,7 +24,7 @@ function ProjectCard({ p, s }: { p: Entity; s: Summary }) {
         <p className="mt-1 line-clamp-2 text-muted">{p.data.description || 'No description yet.'}</p>
         <div className="mt-3"><Progress value={s.progress} /><div className="mt-1 text-xs text-muted">{s.progress}% of tasks (or features) completed</div></div>
         <div className="mt-3 grid grid-cols-4 gap-2">
-          <Stat label="Features" value={s.features} /><Stat label="Done" value={s.featuresCompleted} /><Stat label="Open tasks" value={s.tasksOpen} /><Stat label="Questions" value={s.openQuestions.length} />
+          <Stat label="Features" value={s.features} /><Stat label="Need your OK" value={s.featuresAwaitingApproval ?? 0} /><Stat label="Done" value={s.featuresCompleted} /><Stat label="Open issues" value={s.issuesOpen ?? 0} />
         </div>
       </Card>
     </Link>
@@ -36,18 +36,21 @@ export function Overview() {
   const recent = useAsync(() => api.recent(), []);
   if (ov.error) return <p className="text-bad">{ov.error}</p>;
   if (!ov.data) return <p className="text-muted">Loading…</p>;
-  const questions = ov.data.reduce((n, x) => n + x.summary.openQuestions.length, 0);
   return (
     <>
       <PageHeader title="Overview" help="Where every project stands. Everything here comes from what you entered." actions={<Link to="/projects/new"><Button variant="primary">New project</Button></Link>} />
       {ov.data.length === 0 ? <Empty>No projects yet. Create your first one. You can answer as much or as little as you like.</Empty> : (
         <>
-          <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
-            <Card><Stat label="Projects" value={ov.data.length} /></Card>
-            <Card><Stat label="Features in development" value={ov.data.reduce((n, x) => n + x.summary.featuresInDevelopment, 0)} /></Card>
-            <Card><Stat label="Open tasks" value={ov.data.reduce((n, x) => n + x.summary.tasksOpen, 0)} /></Card>
-            <Card><Stat label="Open questions" value={questions} /></Card>
-          </div>
+          {(() => {
+            const waiting = ov.data.reduce((n, x) => n + x.summary.featuresAwaitingApproval, 0); const building = ov.data.reduce((n, x) => n + x.summary.featuresInDevelopment, 0);
+            return (
+              <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
+                <Card><Stat label="Features waiting for your OK" value={waiting} hint={waiting ? 'Approve them in each project\'s Needs you' : undefined} /></Card>
+                <Card><Stat label="Features being built or tested" value={building} hint={!building && waiting ? 'Nothing can be marked as being built until you approve it' : undefined} /></Card>
+                <Card><Stat label="Features done" value={ov.data.reduce((n, x) => n + x.summary.featuresCompleted, 0)} /></Card>
+                <Card><Stat label="Open issues" value={ov.data.reduce((n, x) => n + x.summary.issuesOpen, 0)} /></Card>
+              </div>);
+          })()}
           <div className="grid gap-4 md:grid-cols-2">{ov.data.map(({ project, summary }) => <ProjectCard key={project.id} p={project} s={summary} />)}</div>
         </>
       )}

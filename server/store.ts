@@ -473,6 +473,8 @@ export class Store {
       featuresInDevelopment: count(features, 'In development', 'Testing'),
       featuresPlanned: count(features, 'Approved', 'Planned'),
       featuresIdeas: count(features, 'Idea', 'Proposed', 'Needs clarification', 'Under review'),
+      featuresAwaitingApproval: features.filter((f) => !f.approved && f.status !== 'On hold').length,
+      issuesOpen: count(by('issue'), 'Open', 'Confirmed', 'In progress'),
       tasksOpen: tasks.filter((t) => t.status !== 'Completed').length,
       tasksTotal: tasks.length,
       parts: by('part').length,

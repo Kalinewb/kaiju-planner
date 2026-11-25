@@ -419,7 +419,7 @@ export function DesignPage() {
       {(msg || err) && <div role={err ? 'alert' : 'status'} className={cx('fixed bottom-4 right-4 z-40 max-w-sm rounded-lg px-3 py-2 text-sm shadow-lg', err ? 'bg-bad-soft text-bad' : 'bg-ok-soft text-ok')}>{err || msg}{err && <button className="ml-2 underline" onClick={() => setErr('')}>dismiss</button>}</div>}
 
       {/* workspace: the preview on the left, outline and properties on the right. Each scrolls by itself, so the page does not. */}
-      <div className="grid gap-3 lg:h-[calc(100vh-20rem)] lg:min-h-[480px] lg:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="grid gap-3 lg:h-[calc(100vh-23rem)] lg:min-h-[480px] lg:grid-cols-[minmax(0,1fr)_360px]">
         <div className="relative flex min-h-[420px] flex-col overflow-hidden rounded-xl border border-line bg-sunken">
           <div className="relative flex items-center gap-2 border-b border-line bg-panel px-3 py-2">
             <Button variant="primary" onClick={() => { setMenu(menu === 'add' ? null : 'add'); setQuery(''); }} aria-haspopup="listbox" aria-expanded={menu === 'add'}>+ Add element</Button>
