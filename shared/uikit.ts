@@ -13,7 +13,7 @@ export interface ElementDef {
 }
 
 const label: Prop = { key: 'label', label: 'Label', type: 'text', def: 'Label' };
-const icon: Prop = { key: 'icon', label: 'Placeholder icon', type: 'icon', def: '' };
+const icon: Prop = { key: 'icon', label: 'Icon', type: 'icon', def: '' };
 
 export const ELEMENTS: ElementDef[] = [
   { type: 'header', label: 'Page header (back and close)', group: 'Layout', kit: 'UBack', keys: 'Esc goes back one level, then closes', help: 'The page title and the close control. In the notch the ONLY back control is the invisible strip at the top middle (a chevron shows on hover, Esc is its alias), so panels draw no back button of their own and keep the top-middle zone clear: title on the left, buttons on the right.', props: [{ key: 'title', label: 'Title', type: 'text', def: 'Title' }, icon, { key: 'style', label: 'Title style', type: 'select', options: ['title', 'prompt'], def: 'title', help: 'prompt is the menu\'s quiet "Go…" line' }, { key: 'subtitle', label: 'Small-caps line under the title', type: 'text', def: '' }, { key: 'action', label: 'Text action on the right (e.g. Refresh)', type: 'text', def: '' }, { key: 'master', label: 'Master switch on the right', type: 'select', options: ['none', 'off', 'on'], def: 'none' }, { key: 'back', label: 'Draw a back button (against the design rule)', type: 'bool', def: 'false' }, { key: 'close', label: 'Show close', type: 'bool', def: 'true' }] },
@@ -72,14 +72,49 @@ export const splitOptions = (s: string | undefined) => (s ?? '').split(',').map(
 
 export const ELEMENT_BY_TYPE: Record<string, ElementDef> = Object.fromEntries(ELEMENTS.map((e) => [e.type, e]));
 
-/** Placeholder icons. Plain emoji on purpose: they are stand-ins until real artwork exists. */
-export const ICONS: { name: string; glyph: string }[] = [
-  ['battery', '🔋'], ['headphones', '🎧'], ['ear', '👂'], ['microphone', '🎙️'], ['speaker', '🔊'], ['muted', '🔇'], ['wifi', '📶'], ['bluetooth', '🔵'],
-  ['bell', '🔔'], ['settings', '⚙️'], ['clock', '🕒'], ['sun', '☀️'], ['moon', '🌙'], ['lock', '🔒'], ['camera', '📷'], ['pointer', '🖱️'],
-  ['keyboard', '⌨️'], ['star', '⭐'], ['info', 'ℹ️'], ['warning', '⚠️'], ['check', '✅'], ['plus', '➕'], ['refresh', '🔄'], ['power', '⏻'],
-  ['temperature', '🌡️'], ['chat', '💬'], ['person', '👤'], ['screen', '🖥️'], ['music', '🎵'], ['folder', '📂'],
-].map(([name, glyph]) => ({ name, glyph }));
+/** Icons: the Nerd Font glyphs (Material Design set) Omarchy and the plugins draw with, by a short name.
+ *  The web app ships a tiny subset of JetBrainsMono Nerd Font for these (web/public/fonts/kaiju-glyphs.woff2). */
+export const ICONS: { name: string; glyph: string; nerd: string; code: string }[] = [
+  { name: 'battery', glyph: '\u{f0079}', nerd: 'md-battery', code: 'U+F0079' },
+  { name: 'headphones', glyph: '\u{f02cb}', nerd: 'md-headphones', code: 'U+F02CB' },
+  { name: 'ear', glyph: '\u{f07c5}', nerd: 'md-ear_hearing', code: 'U+F07C5' },
+  { name: 'microphone', glyph: '\u{f036c}', nerd: 'md-microphone', code: 'U+F036C' },
+  { name: 'speaker', glyph: '\u{f057e}', nerd: 'md-volume_high', code: 'U+F057E' },
+  { name: 'muted', glyph: '\u{f075f}', nerd: 'md-volume_mute', code: 'U+F075F' },
+  { name: 'wifi', glyph: '\u{f05a9}', nerd: 'md-wifi', code: 'U+F05A9' },
+  { name: 'bluetooth', glyph: '\u{f00af}', nerd: 'md-bluetooth', code: 'U+F00AF' },
+  { name: 'bell', glyph: '\u{f009a}', nerd: 'md-bell', code: 'U+F009A' },
+  { name: 'settings', glyph: '\u{f0493}', nerd: 'md-cog', code: 'U+F0493' },
+  { name: 'clock', glyph: '\u{f0954}', nerd: 'md-clock', code: 'U+F0954' },
+  { name: 'sun', glyph: '\u{f0599}', nerd: 'md-weather_sunny', code: 'U+F0599' },
+  { name: 'moon', glyph: '\u{f0594}', nerd: 'md-weather_night', code: 'U+F0594' },
+  { name: 'lock', glyph: '\u{f033e}', nerd: 'md-lock', code: 'U+F033E' },
+  { name: 'camera', glyph: '\u{f0100}', nerd: 'md-camera', code: 'U+F0100' },
+  { name: 'pointer', glyph: '\u{f037d}', nerd: 'md-mouse', code: 'U+F037D' },
+  { name: 'keyboard', glyph: '\u{f030c}', nerd: 'md-keyboard', code: 'U+F030C' },
+  { name: 'star', glyph: '\u{f04ce}', nerd: 'md-star', code: 'U+F04CE' },
+  { name: 'info', glyph: '\u{f02fd}', nerd: 'md-information_outline', code: 'U+F02FD' },
+  { name: 'warning', glyph: '\u{f0026}', nerd: 'md-alert', code: 'U+F0026' },
+  { name: 'check', glyph: '\u{f012c}', nerd: 'md-check', code: 'U+F012C' },
+  { name: 'plus', glyph: '\u{f0415}', nerd: 'md-plus', code: 'U+F0415' },
+  { name: 'minus', glyph: '\u{f0374}', nerd: 'md-minus', code: 'U+F0374' },
+  { name: 'close', glyph: '\u{f0156}', nerd: 'md-close', code: 'U+F0156' },
+  { name: 'chevron', glyph: '\u{f0142}', nerd: 'md-chevron_right', code: 'U+F0142' },
+  { name: 'refresh', glyph: '\u{f0450}', nerd: 'md-refresh', code: 'U+F0450' },
+  { name: 'power', glyph: '\u{f0425}', nerd: 'md-power', code: 'U+F0425' },
+  { name: 'eject', glyph: '\u{f01ea}', nerd: 'md-eject', code: 'U+F01EA' },
+  { name: 'gpu', glyph: '\u{f08ae}', nerd: 'md-expansion_card', code: 'U+F08AE' },
+  { name: 'face', glyph: '\u{f0643}', nerd: 'md-face_man', code: 'U+F0643' },
+  { name: 'temperature', glyph: '\u{f050f}', nerd: 'md-thermometer', code: 'U+F050F' },
+  { name: 'chat', glyph: '\u{f0369}', nerd: 'md-message_text', code: 'U+F0369' },
+  { name: 'person', glyph: '\u{f0004}', nerd: 'md-account', code: 'U+F0004' },
+  { name: 'screen', glyph: '\u{f0379}', nerd: 'md-monitor', code: 'U+F0379' },
+  { name: 'music', glyph: '\u{f075a}', nerd: 'md-music', code: 'U+F075A' },
+  { name: 'folder', glyph: '\u{f024b}', nerd: 'md-folder', code: 'U+F024B' },
+];
 export const iconGlyph = (name: string | undefined) => ICONS.find((i) => i.name === name)?.glyph ?? '';
+/** An icon value is a name from ICONS, or a glyph pasted as it is (one character, no letters). */
+export const iconOf = (v: string | undefined) => iconGlyph(v) || (v && [...v].length === 1 && !/[a-z0-9]/i.test(v) ? v : '');
 
 export interface El { id: string; type: string; props: Record<string, string> }
 
@@ -202,7 +237,7 @@ export function buildDesignSpec(component: string, pages: DesignPage[]): { markd
   const pageName = (v: string) => pages.find((x) => x.id === v)?.name ?? pages.find((x) => x.name.toLowerCase() === v.toLowerCase())?.name ?? v;
   const out: string[] = [];
   out.push(`# UI design: ${component}\n`);
-  out.push('> Draft design made in the Kaiju Planner UI builder. Build it from the omarchy-ui kit components named below. An element marked **NOT IN THE KIT** has no kit component yet: do not invent a look for it. Ask the owner, or add it to the kit first. Icons are placeholders (names only), not final artwork. Design rule: in the notch the only back control is the invisible strip at the top middle (Esc is its alias), so pages draw no back button and keep that zone clear.\n');
+  out.push('> Draft design made in the Kaiju Planner UI builder. Build it from the omarchy-ui kit components named below. An element marked **NOT IN THE KIT** has no kit component yet: do not invent a look for it. Ask the owner, or add it to the kit first. Icons are Nerd Font glyphs (Material Design set), named with their codepoint. Design rule: in the notch the only back control is the invisible strip at the top middle (Esc is its alias), so pages draw no back button and keep that zone clear.\n');
   if (!pages.length) out.push('_No pages designed yet._\n');
   pages.forEach((pg, pi) => {
     out.push(`## Page ${pi + 1}: ${pg.name || 'Untitled'}\n`);
@@ -216,7 +251,7 @@ export function buildDesignSpec(component: string, pages: DesignPage[]): { markd
       for (const prop of def.props) {
         const v = p[prop.key];
         if (v === undefined || v === '' || prop.key === 'label' || prop.key === 'title' || prop.key === 'text') continue;
-        if (prop.type === 'icon') bits.push(`icon: ${v} (placeholder)`);
+        if (prop.type === 'icon') { const ic = ICONS.find((i) => i.name === v); bits.push(ic ? `icon: ${v} (Nerd Font ${ic.nerd}, ${ic.code})` : `icon: ${v} (U+${(v.codePointAt(0) ?? 0).toString(16).toUpperCase()})`); }
         else if (prop.type === 'page') bits.push(`when pressed, opens page "${pageName(v)}"`);
         else if (prop.key === 'opens') bits.push(`opens: ${splitOptions(v).map(pageName).join(' | ')}`);
         else if (prop.type === 'options') bits.push(`${prop.key === 'options' ? 'choices' : prop.key}: ${splitOptions(v).join(' | ')}`);

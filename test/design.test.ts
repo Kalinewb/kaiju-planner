@@ -35,7 +35,7 @@ test('the written spec names kit components, keeps placeholders honest, and list
   const spec = buildDesignSpec('AirPods', [{ name: 'Main', elements: [newEl('section'), pod, mode, noise] }, { name: 'Settings', elements: [] }]);
   assert.match(spec.markdown, /# UI design: AirPods/); assert.match(spec.markdown, /## Page 1: Main/); assert.match(spec.markdown, /## Page 2: Settings/);
   assert.match(spec.markdown, /\*\*URow \(stacked\) \+ USegmented\*\* \(Selector \(one of several\)\) "Listening mode".*choices: Off \| Noise Cancellation \| Transparency/);
-  assert.match(spec.markdown, /\*\*URow\*\* \(Row\) "Left pod".*value: 87%.*icon: battery \(placeholder\)/);
+  assert.match(spec.markdown, /\*\*URow\*\* \(Row\) "Left pod".*value: 87%.*icon: battery \(Nerd Font md-battery, U\+F0079\)/);
   assert.match(spec.markdown, /\*\*NOT IN THE KIT\*\* \(Slider\) "Noise level"/);
   assert.match(spec.markdown, /## Gaps in the UI kit[\s\S]*\*\*Slider\*\* is used 1 time/);
   assert.deepEqual(spec.gaps.map((g) => g.element), ['Slider']);
