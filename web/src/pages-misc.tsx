@@ -1,5 +1,4 @@
 import { useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { KINDS, DOC_SECTIONS } from '../../shared/schema.ts';
 import type { Entity } from '../../shared/schema.ts';
 import { api } from './api.ts';
@@ -68,65 +67,6 @@ export function HistoryPage() {
       <select aria-label="Filter" className="mb-4 max-w-48" value={f} onChange={(e) => setF(e.target.value)}><option value="">Everything</option>{['created', 'edited', 'approved', 'status', 'completed', 'deleted', 'link', 'imported'].map((a) => <option key={a}>{a}</option>)}</select>
       <Card>{list.length === 0 ? <p className="text-muted">Nothing recorded.</p> : <ul className="divide-y divide-line">{list.map((x) => (
         <li key={x.id} className="flex flex-wrap items-baseline justify-between gap-2 py-2"><span><span className="mr-2 rounded bg-sunken px-1.5 py-0.5 text-xs text-muted">{x.action}</span>{x.summary}</span><span className="text-xs text-muted">{x.actor} · {fmtDate(x.at)}</span></li>))}</ul>}</Card>
-    </>
-  );
-}
-
-function useProjects() { return useAsync(() => api.list({ kind: 'project' }), []); }
-
-export function GlobalIdeas() {
-  const ps = useProjects();
-  const all = useAsync(async () => (await api.list({ kind: 'feature' })).filter((f) => !f.approved && f.status !== 'Rejected'), []);
-  const name = (id: string | null) => ps.data?.find((p) => p.id === id)?.title ?? '';
-  return (
-    <>
-      <PageHeader title="Ideas & Future Features" help="Everything not yet approved. Ideas never reach a roadmap or a brief until you approve them." />
-      {all.data?.length === 0 && <Empty>No open ideas. Add one from a project's Features page.</Empty>}
-      <div className="space-y-2">{all.data?.map((f) => (
-        <Link key={f.id} to={`/p/${f.project_id}/features/${f.id}`} className="flex items-center justify-between rounded-xl border border-line bg-panel px-4 py-3 hover:border-accent">
-          <div><div className="font-medium">{f.title || 'Untitled'}</div><div className="text-xs text-muted">{name(f.project_id)}{f.data.origin === 'Future feature planning' ? ' · future feature' : ''}</div></div><StatusBadge status={f.status} /></Link>))}</div>
-      {ps.data && ps.data.length > 0 && <div className="mt-5 flex flex-wrap gap-2">{ps.data.map((p) => <Link key={p.id} to={`/p/${p.id}/features/future`}><Button>Plan a future feature in {p.title}</Button></Link>)}</div>}
-    </>
-  );
-}
-
-export function GlobalTasks() {
-  const ps = useProjects();
-  const tasks = useAsync(async () => (await api.list({ kind: 'task' })).filter((t) => t.status !== 'Completed'), []);
-  return (
-    <>
-      <PageHeader title="Tasks" help="Open tasks from every project. Open a project to move them on the board." />
-      {tasks.data?.length === 0 && <Empty>No open tasks.</Empty>}
-      <div className="space-y-2">{tasks.data?.map((t) => (
-        <Link key={t.id} to={`/p/${t.project_id}/tasks`} className="flex items-center justify-between rounded-xl border border-line bg-panel px-4 py-3 hover:border-accent"><div><div className="font-medium">{t.title}</div><div className="text-xs text-muted">{ps.data?.find((p) => p.id === t.project_id)?.title}</div></div><StatusBadge status={t.status} /></Link>))}</div>
-    </>
-  );
-}
-
-export function GlobalDocs() {
-  const ps = useProjects();
-  const docs = useAsync(() => api.list({ kind: 'doc' }), []);
-  return (
-    <>
-      <PageHeader title="Documentation" help="Documentation pages from every project." />
-      {docs.data?.length === 0 && <Empty>No documentation yet. Add pages inside a project.</Empty>}
-      <div className="space-y-2">{docs.data?.map((d) => (
-        <Link key={d.id} to={`/p/${d.project_id}/docs`} className="block rounded-xl border border-line bg-panel px-4 py-3 hover:border-accent"><div className="font-medium">{d.title}</div><div className="text-xs text-muted">{ps.data?.find((p) => p.id === d.project_id)?.title} · {d.data.section || 'General'}</div></Link>))}</div>
-    </>
-  );
-}
-
-export function GlobalRoadmaps() {
-  const ps = useProjects();
-  const phases = useAsync(() => api.list({ kind: 'phase' }), []);
-  return (
-    <>
-      <PageHeader title="Development Roadmaps" help="Phases from every project. Open a project's Roadmap to change them." />
-      {ps.data?.map((p) => {
-        const mine = (phases.data ?? []).filter((x) => x.project_id === p.id);
-        return <Card key={p.id} className="mb-3"><Link to={`/p/${p.id}/roadmap`} className="font-semibold hover:text-accent">{p.title}</Link>
-          <ul className="mt-2 space-y-1">{mine.map((x, i) => <li key={x.id} className="flex justify-between"><span>{i + 1}. {x.title}</span><StatusBadge status={x.status} /></li>)}{!mine.length && <li className="text-muted">No phases yet.</li>}</ul></Card>;
-      })}
     </>
   );
 }

@@ -17,7 +17,7 @@ import { Structure, NodeLayout, NodeOverview, SidebarTree } from './structure.ts
 import { ScopeContext } from './scope.tsx';
 import { ToastHost } from './toast.tsx';
 import { QuickAddDialog } from './quickadd.tsx';
-import { Collection, TrashPage, HistoryPage, SettingsPage, GlobalIdeas, GlobalTasks, GlobalDocs, GlobalRoadmaps } from './pages-misc.tsx';
+import { Collection, TrashPage, HistoryPage, SettingsPage } from './pages-misc.tsx';
 
 export interface ProjectCtx { project: Entity; reload: () => void }
 export const useProject = () => useOutletContext<ProjectCtx>();
@@ -144,10 +144,6 @@ export function App() {
         <Route index element={<Overview />} />
         <Route path="projects" element={<Projects />} />
         <Route path="projects/new" element={<NewProject />} />
-        <Route path="ideas" element={<GlobalIdeas />} />
-        <Route path="roadmaps" element={<GlobalRoadmaps />} />
-        <Route path="tasks" element={<GlobalTasks />} />
-        <Route path="docs" element={<GlobalDocs />} />
         <Route path="settings" element={<SettingsPage />} />
         <Route path="trash" element={<TrashPage />} />
         <Route path="p/:pid" element={<ProjectGate />}>
