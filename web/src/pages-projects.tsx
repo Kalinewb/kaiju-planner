@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { KINDS, PROJECT_STATUSES, hasUnapprovedChanges } from '../../shared/schema.ts';
+import { KINDS, hasUnapprovedChanges } from '../../shared/schema.ts';
 import type { Entity } from '../../shared/schema.ts';
 import { api } from './api.ts';
 import type { Summary } from './api.ts';

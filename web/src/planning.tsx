@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { KINDS, LINK_TYPES, PHASE_STATUSES, TASK_STATUSES } from '../../shared/schema.ts';
+import { LINK_TYPES, PHASE_STATUSES, TASK_STATUSES } from '../../shared/schema.ts';
 import type { Entity } from '../../shared/schema.ts';
 import { api, ApiError } from './api.ts';
 import { Button, Card, Confirm, Empty, Explain, PageHeader, Progress, StatusBadge, cx, useAsync } from './ui.tsx';
@@ -240,4 +240,3 @@ export function Dependencies() {
     </>
   );
 }
-void KINDS;

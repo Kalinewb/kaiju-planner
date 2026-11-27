@@ -153,7 +153,7 @@ export function bulkImport(store: Store, payload: any, opts: { dry_run?: boolean
 
     if (payload.links !== undefined) {
       if (!Array.isArray(payload.links)) throw new HttpError(400, '"links" must be a list.');
-      for (const [i, l] of payload.links.entries()) {
+      for (const l of payload.links) {
         const a = find('feature', l?.from); const b = find('feature', l?.to);
         const title = `${l?.from} → ${l?.to}`;
         if (!a || !b) { report.skipped.push({ kind: 'link', title, reason: 'one of the features was not found' }); continue; }
@@ -162,7 +162,6 @@ export function bulkImport(store: Store, payload: any, opts: { dry_run?: boolean
           store.addLink({ project_id: pid, from_id: a.id, to_id: b.id, type: l.type, source: 'ai', confirmed: false, note: typeof l.reason === 'string' ? l.reason.slice(0, 600) : '', actor: ACTOR });
           report.created.push({ kind: 'link (possible)', title, id: null });
         } catch (x) { report.skipped.push({ kind: 'link', title, reason: (x as Error).message }); }
-        void i;
       }
     }
 

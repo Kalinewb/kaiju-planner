@@ -42,7 +42,7 @@ export function buildBrief(inp: BriefInput): { markdown: string; complete: boole
       questions.push('There are edits to this feature that you have not approved yet. This brief uses the last approved version only.');
   }
   if (fa && !fa.testing_plan?.trim() && !feature?.flags.testing_plan) questions.push('How should this be tested? Nothing has been approved.');
-  if (isTask && !target.approved) { /* tasks are not approvable; their text is context, not requirements */ }
+  // Tasks are not approvable; their text is context, not requirements.
 
   const part = inp.parts.find((p) => p.id === (fa?.part_id ?? feature?.data.part_id ?? target.data.part_id));
   const linkedIds = (type: string, confirmed: boolean) =>

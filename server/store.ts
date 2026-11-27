@@ -191,7 +191,7 @@ export class Store {
     const def = KINDS[kind];
     if (!def.statuses) return;
     if (!def.statuses.includes(status)) throw new HttpError(400, `"${status}" is not a valid status`);
-    if (kind === 'feature' && FEATURE_NEEDS_APPROVAL.includes(status) && !hasApproval && status !== undefined)
+    if (kind === 'feature' && FEATURE_NEEDS_APPROVAL.includes(status) && !hasApproval)
       throw new HttpError(409, `A feature cannot be "${status}" until you have approved it.`);
     if (kind === 'decision' && status === 'Approved' && !hasApproval)
       throw new HttpError(409, 'Use "Approve" to approve a decision.');
@@ -293,11 +293,11 @@ export class Store {
   }
 
   // ---------- trash ----------
-  trash(project_id?: string, includeRestored = false) {
+  trash(project_id?: string) {
     const rows = (project_id
       ? this.db.prepare('SELECT id, entity_id, kind, title, project_id, deleted_at, deleted_by, reason, restored_at FROM trash WHERE project_id = ? ORDER BY deleted_at DESC').all(project_id)
       : this.db.prepare('SELECT id, entity_id, kind, title, project_id, deleted_at, deleted_by, reason, restored_at FROM trash ORDER BY deleted_at DESC').all()) as Row[];
-    return rows.filter((r) => includeRestored || !r.restored_at);
+    return rows.filter((r) => !r.restored_at);
   }
 
   /** Puts a deleted record back with its comments, revisions, relationships and the references that pointed at it. */
@@ -378,7 +378,7 @@ export class Store {
   }
   addLink(input: { project_id: string; from_id: string; to_id: string; type: string; confirmed?: boolean; source?: 'user' | 'ai'; note?: string; actor?: string }): Link {
     const a = this.get(input.from_id); const b = this.get(input.to_id);
-    if (a.project_id !== input.project_id || (input.type !== 'phase_feature' && b.project_id !== input.project_id) || (input.type === 'phase_feature' && b.project_id !== input.project_id))
+    if (a.project_id !== input.project_id || b.project_id !== input.project_id)
       throw new HttpError(400, 'Both records must be in this project');
     if (input.from_id === input.to_id) throw new HttpError(400, 'Something cannot depend on itself');
     const dup = this.db.prepare('SELECT id FROM links WHERE from_id=? AND to_id=? AND type=?').get(input.from_id, input.to_id, input.type);

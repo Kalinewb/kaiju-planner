@@ -231,7 +231,6 @@ export function SettingsPage() {
     </>
   );
 }
-void DOC_SECTIONS;
 
 export function TrashPage() {
   const rows = useAsync(() => api.trash(), []);

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { PART_STATUSES, KINDS } from '../../shared/schema.ts';
+import { KINDS } from '../../shared/schema.ts';
 import type { Entity } from '../../shared/schema.ts';
 import { PART_TYPES } from '../../shared/schema.ts';
 import { buildTree, descendantIds, nodeStats, pathTo } from '../../shared/tree.ts';

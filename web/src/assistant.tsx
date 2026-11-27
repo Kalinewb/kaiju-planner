@@ -68,7 +68,7 @@ export function Assistant() {
               <div key={i} className={m.role === 'user' ? 'ml-8' : 'mr-8'}>
                 <div className="mb-0.5 text-xs text-muted">{m.role === 'user' ? 'You' : 'Claude (suggestions only)'}</div>
                 <div className={m.role === 'user' ? 'whitespace-pre-wrap rounded-xl bg-accent-soft px-4 py-2.5' : 'whitespace-pre-wrap rounded-xl border border-line bg-panel px-4 py-2.5'}>{m.content}</div>
-                {m.proposals?.map((p, j) => <ProposalCard key={j} p={p} pid={project.id} onDismiss={() => setLocal((l) => l.map((x, k) => (x === m ? { ...x, proposals: x.proposals!.filter((_, n) => n !== j) } : x)))} />)}
+                {m.proposals?.map((p, j) => <ProposalCard key={j} p={p} pid={project.id} onDismiss={() => setLocal((l) => l.map((x) => (x === m ? { ...x, proposals: x.proposals!.filter((_, n) => n !== j) } : x)))} />)}
               </div>))}
             {busy && <p className="mr-8 text-sm text-muted" role="status">Claude is thinking…</p>}
             <div ref={end} />

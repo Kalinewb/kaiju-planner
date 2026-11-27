@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import { COND_OPS_BY_TYPE, ELEMENTS, ELEMENT_BY_TYPE, ICONS, buildDesignSpec, cleanConditions, conditionText, iconGlyph, iconOf, isShown, newEl, parseElements, splitOptions, fillTokens, parseSamples, LOOKS, foldedIds } from '../../shared/uikit.ts';
+import { COND_OPS_BY_TYPE, ELEMENTS, ELEMENT_BY_TYPE, ICONS, buildDesignSpec, cleanConditions, iconGlyph, iconOf, isShown, newEl, parseElements, splitOptions, fillTokens, parseSamples, LOOKS, foldedIds } from '../../shared/uikit.ts';
 import type { El, ElementDef, Prop } from '../../shared/uikit.ts';
 import type { Entity } from '../../shared/schema.ts';
 import { api } from './api.ts';
@@ -340,7 +340,7 @@ export function DesignPage() {
   }
   async function copyPageTo(partTarget: string) {
     if (!page || !partTarget) return; setMenu(null);
-    try { const p = await api.create({ kind: 'page', project_id: project.id, data: { name: page.title, part_id: partTarget, elements: JSON.stringify(els), width: size.w, height: size.h, surface } }); void p; flash('Page copied.'); } catch (x) { setErr((x as Error).message); }
+    try { await api.create({ kind: 'page', project_id: project.id, data: { name: page.title, part_id: partTarget, elements: JSON.stringify(els), width: size.w, height: size.h, surface } }); flash('Page copied.'); } catch (x) { setErr((x as Error).message); }
   }
 
   async function copySpec() { try { await navigator.clipboard.writeText(spec.markdown); flash('Spec copied.'); } catch { flash('Could not copy. Use Download.'); } }

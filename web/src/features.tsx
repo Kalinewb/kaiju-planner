@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { FEATURE_STATUSES, FEATURE_NEEDS_APPROVAL, KINDS, LINK_TYPES, hasUnapprovedChanges, lines } from '../../shared/schema.ts';
+import { FEATURE_STATUSES, KINDS, LINK_TYPES, hasUnapprovedChanges } from '../../shared/schema.ts';
 import type { Entity } from '../../shared/schema.ts';
 import { api, ApiError } from './api.ts';
 import type { Brief } from './api.ts';
@@ -281,4 +281,3 @@ export function FeatureWizard({ future }: { future?: boolean }) {
     </div>
   );
 }
-void lines;

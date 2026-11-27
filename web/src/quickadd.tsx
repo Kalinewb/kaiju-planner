@@ -13,7 +13,6 @@ const HINT: Record<QuickKind, string> = { feature: 'Something it should be able 
 
 export async function createQuick(projectId: string, kind: QuickKind, title: string, partId: string) {
   const name = title.trim();
-  if (kind === 'feature') return api.create({ kind, project_id: projectId, data: { name, part_id: partId } });
   if (kind === 'issue') return api.create({ kind, project_id: projectId, data: { name, part_id: partId, type: 'Bug', severity: 'Not set' } });
   return api.create({ kind, project_id: projectId, data: { name, part_id: partId } });
 }
