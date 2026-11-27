@@ -76,10 +76,10 @@ export class LoginLimiter {
   ok(key: string) { this.m.delete(key); }
 }
 
-/** Access tokens for Claude Code. Only a hash is stored, so a token is shown once and cannot be read back. */
-/** drafts: read and add drafts. manager: also change statuses (with a reason) and add comments. Neither can approve, delete or touch settings. */
+/** drafts: read and add drafts. manager: also change statuses (with a reason), add comments, delete records (not projects) and restore them. Neither can approve or touch settings. */
 const TOKEN_SCOPES = ['drafts', 'manager'];
 
+/** Access tokens for Claude Code. Only a hash is stored, so a token is shown once and cannot be read back. */
 export class ApiTokens {
   db: DatabaseSync;
   constructor(db: DatabaseSync) { this.db = db; }

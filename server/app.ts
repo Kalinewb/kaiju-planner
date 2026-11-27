@@ -115,7 +115,8 @@ export function createApp(o: AppOptions) {
   app.use('/api/*', async (c, next) => {
     const authz = c.req.header('authorization');
     if (authz?.startsWith('Bearer ')) {
-      // Access token for Claude Code: can read, add drafts and suggest. Cannot approve, complete, delete or change settings.
+      // Access token for Claude Code: can read, add drafts and suggest. A manager token can also set statuses (including
+      // Completed), comment, delete records (not projects) and restore them. No token can approve or change settings.
       const ip = clientIp(c);
       if (!isHttps(c) && !isPrivateIp(ip)) return c.json({ error: 'Tokens are only accepted over HTTPS when you are not on your home network.' }, 403);
       const wait = limiter.retryAfter(ip);
