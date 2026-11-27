@@ -24,7 +24,7 @@ Projects and guided project definition · **Structure: a tree of components** (p
 
 A project is a **tree of components**. Each component has a type you choose (Plugin, Subplugin, Addon, Integration, Module, or your own) and can live inside another one, to any depth. Features, tasks, roadmap phases, decisions, docs and debt can each belong to a component.
 
-- **Sidebar:** the tree sits under *Structure*. Pick a component and you see **only its own** features, tasks, roadmap, decisions, docs and debt, in tabs. The rarely-needed project-wide pages are folded under *Whole project*.
+- **Sidebar:** the tree sits under *Structure*. Pick a component and you see **only its own** records, in tabs: *Overview*, *Features*, *Issues*, *Design*, *QA* and *Roadmap*, with *Tasks*, *Decisions*, *Docs* and *Debt* behind *More*. The rarely-needed project-wide pages are folded under *Whole project*.
 - **Roll-up:** tick *Include everything inside it* to see a component together with everything nested in it. Progress and counts on the Structure page include what is inside.
 - **Safe moves:** a component cannot be placed inside itself or its own contents. Deleting one asks first and moves what was inside it to the top level. Nothing is deleted with it.
 - **Claude Code import:** `parts` accept `type` and `parent` (by name, in any order), and phases, decisions and docs accept `part`.
@@ -34,9 +34,9 @@ A project is a **tree of components**. Each component has a type you choose (Plu
 Every component has a **Design** tab for sketching its screens from the omarchy-ui kit's elements.
 
 - **Pages:** add as many as you need, rename, reorder, **duplicate** and delete them from the *Page* menu. Each saves by itself ("Saved ✓"). The page itself does not scroll: the preview, the outline and the properties each scroll on their own.
-- **If-conditions:** any element can be shown only if an earlier switch, selector, dropdown, stepper, slider or level bar has a value (for example, "Adaptive noise level" only when "Listening mode" is "Adaptive"). Hidden elements are dimmed so you can still edit them, or hidden completely with *Preview as user*. The spec says "Shown only if…".
-- **Elements:** everything in the kit (page header with back and close, section header, row, switch, selector, stepper, dropdown, text field, button, tip, notice, toast, confirm sheet, empty state, progress ring), plus the few things your own plugins draw by hand that the kit lacks (level bar, number field, slider). The catalog follows the kit's real properties (for example a row's second line, value and badge, the four button kinds, the three notice tones). Controls sit in a row the way the kit does it, and the spec says so (for example `URow + USwitch`). The gaps were checked by reading the QML of the notch, Face ID, Profiles and eGPU. Every element has labels, a placeholder icon from a small set, and the properties that component really has.
-- **Preview:** a mock-up in the kit's style, in *Hosted black* or *Light*. Switches, selectors, steppers and sliders respond so you can feel the layout. Click an element to edit it.
+- **If-conditions:** any element can be shown only if an earlier element has a certain value or state: a switch, selector, dropdown, stepper, slider, level bar, number field, button, button row, tabs, side navigation, pick-several list, section header, disclosure, progress ring or page state switch (for example, "Adaptive noise level" only when "Listening mode" is "Adaptive"). Two conditions can be joined with *and* or *or*. Hidden elements are dimmed so you can still edit them, or hidden completely with *Preview as user*. The spec says "Shown only if…".
+- **Elements:** the kit's own (page header with back and close, section header, row, switch, selector, stepper, dropdown, text field, button, tip, notice, toast, confirm sheet, empty state, progress ring, and a level bar that is not in a kit release yet), plus elements the kit lacks, such as a slider, card, text block, status line, chart, key binding, widget row and *Custom element*. A number field maps to the kit's stepper, and tabs to its segmented control. The catalog follows the kit's real properties (for example a row's second line, value and badge, the four button kinds, the three notice tones). Controls sit in a row the way the kit does it, and the spec says so (for example `URow + USwitch`). The gaps were checked by reading the QML of the notch, Face ID, Profiles and eGPU. Elements have the properties that component really has. Icons are Nerd Font glyphs: pick one from the set or paste any other.
+- **Preview:** a mock-up in the kit's style, in *Hosted black*, *Notch* (the default), *Translucent* or *Light*. Switches, selectors, steppers and sliders respond so you can feel the layout. Click an element to edit it.
 - **Gaps in the kit:** the kit has no slider yet. You can still use one (and a *Custom element*): they are flagged **NOT IN KIT**, listed under "Missing from the UI kit", and **Track as a kit issue** files an issue against the UI kit component.
 - **Size, buttons, navigation:** *Size* sets the panel width (saved per page). *Buttons* puts two or more buttons side by side. A button (or row) can **open another page**; the preview follows it and shows a *Back* button. Double-click a page tab to rename it, press Enter to save.
 - **Spec for Claude Code:** *Copy spec* or *Download .md* gives a written spec per page naming the kit component, properties, keys and icon names. Claude Code can read it with `kaiju_get_design`, and can draw pages itself with `kaiju_add_item` (kind `page`).
@@ -67,7 +67,7 @@ Every delete takes a **snapshot** first (the item, everything inside it, comment
 - **Plugin facts are real fields:** version, install state, repository link, branch or commit, and a "last checked" date.
 - **Search everything** with Ctrl+K (or the Search button) across every project and record type.
 - **Calmer forms:** the essential fields first, the rest folded under "More fields". Only exceptions get a label (AI suggestion, approved, unclear). Mark something as unclear with one small link.
-- **Fewer sidebar items:** Overview, My Projects, Settings. Inside a project: Dashboard, Needs you, Structure (with the tree), Project Definition, then *Whole project* and *More* folded away.
+- **Fewer sidebar items:** Overview, My Projects, Trash, Settings. Inside a project: Dashboard, Needs you, Issues, Looks, QA, Structure (with the tree), Project Definition, then *Whole project* and *More* folded away.
 
 ## The Claude assistant (optional)
 
@@ -97,17 +97,17 @@ claude mcp add kaiju-planner \
 
 **Keep it current:** the MCP instructions tell Claude to update the planner whenever it changes or learns something about a project, unless you say not to.
 
-**Tools Claude gets:** `kaiju_delete_item`, `kaiju_list_trash`, `kaiju_restore` (manager), `kaiju_import_documents` and `kaiju_upload_screenshots` (read files from your disk, so content never passes through chat), `kaiju_get_schema`, `kaiju_list_projects`, `kaiju_get_project`, `kaiju_bulk_import` (with `dry_run`), `kaiju_add_item`, `kaiju_update_item`, `kaiju_suggest_link`, `kaiju_get_brief`. The brief tool also lets Claude Code fetch the approved instructions for a feature and work from them.
+**Tools Claude gets:** `kaiju_delete_item`, `kaiju_restore`, `kaiju_set_status`, `kaiju_add_comment` (these four need a manager token), `kaiju_list_trash`, `kaiju_get_comments`, `kaiju_import_documents` and `kaiju_upload_screenshots` (read files from your disk, so content never passes through chat), `kaiju_get_schema`, `kaiju_list_projects`, `kaiju_get_project`, `kaiju_bulk_import` (with `dry_run`), `kaiju_add_item`, `kaiju_update_item`, `kaiju_suggest_link`, `kaiju_get_brief`. The brief tool also lets Claude Code fetch the approved instructions for a feature and work from them.
 
 **Two power levels** (chosen when you create the token; existing tokens stay draft-only):
 
 - **Drafts only:** reads everything and adds drafts.
-- **Manager:** also changes statuses, **including Completed**, and adds comments (`kaiju_set_status`, `kaiju_add_comment`, `kaiju_get_comments`). Every status change needs a written reason (at least 3 characters). It shows as *Claude Code* in the change history and stays visible as a comment on the item. Claude can never set *Approved*.
+- **Manager:** also changes statuses, **including Completed**, adds comments, deletes records (never whole projects) and restores them from the trash (`kaiju_set_status`, `kaiju_add_comment`, `kaiju_delete_item`, `kaiju_restore`). Every status change and every deletion needs a written reason (at least 3 characters). Both show as *Claude Code* in the change history, and a status change also stays visible as a comment on the item. Claude can never set *Approved*.
 
 **What a token can and cannot do** (enforced by the server, not by trust):
 
 - It can read everything and add drafts. Everything it adds is **unapproved**, status "Proposed" for features, labelled *AI suggestion* with the author shown as Claude Code in the change history, and it never fills your "original words".
-- It **cannot** approve, confirm a relationship, create briefs, import export files, or touch settings, passwords, the AI key or tokens, whatever its power level. Those are only possible when you are logged in. A drafts-only token also cannot change a status or comment.
+- It **cannot** approve, confirm a relationship, create briefs, import export files, or touch settings, passwords, the AI key or tokens, whatever its power level. Those are only possible when you are logged in. A drafts-only token also cannot change a status, comment, delete or restore.
 - It **cannot overwrite** text you wrote or touch anything you approved. It can fill empty fields and extend its own drafts. Records with the same name are **skipped, not changed**.
 - Real-world status ("half built") goes in as an unverified note, never as the status itself. Tasks and roadmap entries import as unconfirmed drafts for you to review.
 - A dry run changes nothing. A real import is all-or-nothing, with at most 500 items per call.
