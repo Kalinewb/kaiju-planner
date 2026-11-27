@@ -130,7 +130,7 @@ export function createApp(o: AppOptions) {
         || (tok.scope === 'manager' && m === 'POST' && /^\/api\/entities\/[^/]+\/(status|comments)$/.test(path))
         || (tok.scope === 'manager' && m === 'DELETE' && /^\/api\/entities\/[^/]+$/.test(path))
         || (tok.scope === 'manager' && m === 'POST' && /^\/api\/trash\/[^/]+\/restore$/.test(path));
-      if (!allowed) return c.json({ error: 'This token cannot do that. Approving, completing, deleting and settings can only be done by you in the app.' }, 403);
+      if (!allowed) return c.json({ error: 'This token cannot do that. Changing statuses, commenting, deleting and restoring need a manager token. Approving and settings can only be done by you in the app.' }, 403);
       c.set('principal', 'claude'); c.set('scope', tok.scope);
       return next();
     }
