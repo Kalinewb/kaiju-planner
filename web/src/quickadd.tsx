@@ -11,14 +11,14 @@ export type QuickKind = 'feature' | 'issue' | 'task';
 const LABEL: Record<QuickKind, string> = { feature: 'Feature', issue: 'Issue', task: 'Task' };
 const HINT: Record<QuickKind, string> = { feature: 'Something it should be able to do…', issue: 'What is wrong…', task: 'A piece of work to do…' };
 
-export async function createQuick(projectId: string, kind: QuickKind, title: string, partId: string) {
+async function createQuick(projectId: string, kind: QuickKind, title: string, partId: string) {
   const name = title.trim();
   if (kind === 'issue') return api.create({ kind, project_id: projectId, data: { name, part_id: partId, type: 'Bug', severity: 'Not set' } });
   return api.create({ kind, project_id: projectId, data: { name, part_id: partId } });
 }
 
 /** One line to add a feature, an issue or a task. Enter adds it. */
-export function QuickAdd({ kinds = ['feature', 'issue', 'task'], partId, className, autoFocus }: { kinds?: QuickKind[]; partId?: string; className?: string; autoFocus?: boolean }) {
+export function QuickAdd({ kinds = ['feature', 'issue', 'task'], partId, className }: { kinds?: QuickKind[]; partId?: string; className?: string }) {
   const { project } = useProject();
   const scope = useScope();
   const nav = useNavigate();
@@ -41,7 +41,7 @@ export function QuickAdd({ kinds = ['feature', 'issue', 'task'], partId, classNa
         <div className="flex gap-1 rounded-lg bg-sunken p-1" role="radiogroup" aria-label="What to add">
           {kinds.map((k) => <button key={k} type="button" role="radio" aria-checked={kind === k} onClick={() => setKind(k)} className={cx('rounded-md px-2.5 py-1 text-sm', kind === k ? 'bg-panel font-medium shadow-sm' : 'text-muted hover:text-fg')}>{LABEL[k]}</button>)}
         </div>)}
-      <input aria-label={`New ${LABEL[kind].toLowerCase()} title`} autoFocus={autoFocus} className="min-w-48 flex-1" placeholder={HINT[kind]} value={title} onChange={(e) => setTitle(e.target.value)} />
+      <input aria-label={`New ${LABEL[kind].toLowerCase()} title`} className="min-w-48 flex-1" placeholder={HINT[kind]} value={title} onChange={(e) => setTitle(e.target.value)} />
       <Button variant="primary" disabled={busy || !title.trim()}>+ Add {LABEL[kind].toLowerCase()}</Button>
     </form>
   );

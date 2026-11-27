@@ -5,7 +5,7 @@ export class ApiError extends Error {
   constructor(status: number, body: any) { super(body?.error ?? 'Request failed'); this.status = status; this.body = body; }
 }
 
-export let onUnauthorized: () => void = () => {};
+let onUnauthorized: () => void = () => {};
 export const setUnauthorizedHandler = (f: () => void) => { onUnauthorized = f; };
 
 /** Every successful change bumps this, so every list on screen reloads and nothing goes stale. */

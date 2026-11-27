@@ -8,7 +8,7 @@ import { Auth } from './auth.ts';
 import { createApp } from './app.ts';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-export const dataDir = resolve(process.env.KAIJU_DATA ?? join(root, 'data'));
+const dataDir = resolve(process.env.KAIJU_DATA ?? join(root, 'data'));
 const dbPath = join(dataDir, 'kaiju.db');
 const db = openDb(dbPath);
 

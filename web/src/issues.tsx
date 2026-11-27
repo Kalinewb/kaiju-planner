@@ -10,7 +10,7 @@ import { useScope } from './scope.tsx';
 import { QuickAdd } from './quickadd.tsx';
 
 const SEV_TONE: Record<string, string> = { Blocker: 'bg-bad-soft text-bad', High: 'bg-bad-soft text-bad', Medium: 'bg-warn-soft text-warn', Low: 'bg-sunken text-muted', 'Not set': 'bg-sunken text-muted' };
-export function SeverityBadge({ s }: { s?: string }) {
+function SeverityBadge({ s }: { s?: string }) {
   return <span className={cx('inline-block whitespace-nowrap rounded px-1.5 py-0.5 text-[11px] font-medium', SEV_TONE[s || 'Not set'])}>{s && s !== 'Not set' ? s : 'No severity'}</span>;
 }
 

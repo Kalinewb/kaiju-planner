@@ -14,17 +14,15 @@ interface Props {
   projectId?: string;
   options?: Record<string, Entity[]>; // records for ref fields, keyed by kind
   initial?: Record<string, string>;
-  hide?: string[];
   onSaved: (e: Entity) => void;
-  onCancel?: () => void;
   onDeleted?: () => void;
   extraActions?: React.ReactNode;
 }
 
-export function EntityEditor({ entity, kind, projectId, options = {}, initial, hide = [], onSaved, onCancel, onDeleted, extraActions }: Props) {
+export function EntityEditor({ entity, kind, projectId, options = {}, initial, onSaved, onDeleted, extraActions }: Props) {
   const def = KINDS[kind];
   const isFuture = entity?.data.origin === 'Future feature planning' || initial?.origin === 'Future feature planning';
-  const fields = def.fields.filter((f) => !f.hidden && !hide.includes(f.key) && (!f.futureOnly || isFuture));
+  const fields = def.fields.filter((f) => !f.hidden && (!f.futureOnly || isFuture));
   const [data, setData] = useState<Record<string, string>>(() => ({ ...(entity?.data ?? initial ?? {}) }));
   const [flags, setFlags] = useState<Record<string, string>>(() => ({ ...(entity?.flags ?? {}) }));
   const [busy, setBusy] = useState(false);
@@ -148,7 +146,6 @@ export function EntityEditor({ entity, kind, projectId, options = {}, initial, h
       <div className="flex flex-wrap items-center gap-2 border-t border-line pt-4">
         <Button variant="primary" type="submit" disabled={busy || !(data[def.titleField] ?? '').trim()}>{entity ? 'Save' : 'Create'}</Button>
         {def.approvable && entity && <Button type="button" disabled={busy || (!!entity.approved && !unapproved && !dirty)} onClick={() => setAskApprove(true)}>{entity.approved ? 'Approve these changes' : 'Approve'}</Button>}
-        {onCancel && <Button type="button" variant="ghost" onClick={onCancel}>Cancel</Button>}
         {extraActions}
         {entity && <Button type="button" variant="danger" className="ml-auto" onClick={() => setAskDelete({ references: [] })}>Delete</Button>}
       </div>

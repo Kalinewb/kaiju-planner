@@ -1,12 +1,12 @@
 import { scryptSync, randomBytes, timingSafeEqual, createHash } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 
-export function hashPassword(pw: string): string {
+function hashPassword(pw: string): string {
   const salt = randomBytes(16);
   const hash = scryptSync(pw, salt, 64);
   return `scrypt$${salt.toString('hex')}$${hash.toString('hex')}`;
 }
-export function verifyPassword(pw: string, stored: string): boolean {
+function verifyPassword(pw: string, stored: string): boolean {
   const [alg, salt, hash] = stored.split('$');
   if (alg !== 'scrypt' || !salt || !hash) return false;
   const got = scryptSync(pw, Buffer.from(salt, 'hex'), 64);
@@ -78,7 +78,7 @@ export class LoginLimiter {
 
 /** Access tokens for Claude Code. Only a hash is stored, so a token is shown once and cannot be read back. */
 /** drafts: read and add drafts. manager: also change statuses (with a reason) and add comments. Neither can approve, delete or touch settings. */
-export const TOKEN_SCOPES = ['drafts', 'manager'];
+const TOKEN_SCOPES = ['drafts', 'manager'];
 
 export class ApiTokens {
   db: DatabaseSync;

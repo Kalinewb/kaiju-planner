@@ -29,9 +29,9 @@ export interface KindDef {
 }
 
 export const PART_TYPES = ['Plugin', 'Subplugin', 'Integration', 'Addon', 'Module', 'Library', 'Group'];
-export const INSTALL_STATES = ['Not set', 'Not installed', 'Installed', 'Installed and pinned', 'Local copy only'];
-export const PRIORITIES = ['Not set', 'Low', 'Medium', 'High', 'Critical'];
-export const COMPLEXITY = ['Not estimated', 'Small', 'Medium', 'Large', 'Very large'];
+const INSTALL_STATES = ['Not set', 'Not installed', 'Installed', 'Installed and pinned', 'Local copy only'];
+const PRIORITIES = ['Not set', 'Low', 'Medium', 'High', 'Critical'];
+const COMPLEXITY = ['Not estimated', 'Small', 'Medium', 'Large', 'Very large'];
 
 export const FEATURE_STATUSES = [
   'Idea', 'Proposed', 'Needs clarification', 'Under review', 'Approved', 'Planned',
@@ -44,16 +44,16 @@ export const TASK_STATUSES = ['Backlog', 'Planned', 'In progress', 'In review', 
 export const PART_STATUSES = ['Not started', 'Planned', 'In development', 'Testing', 'Completed', 'On hold'];
 export const PHASE_STATUSES = ['Not started', 'In progress', 'Completed', 'On hold'];
 export const PROJECT_STATUSES = ['Defining', 'Planning', 'In development', 'Testing', 'Live', 'On hold', 'Archived'];
-export const DECISION_STATUSES = ['Not decided', 'Proposed', 'Approved', 'Rejected', 'Superseded'];
-export const ISSUE_STATUSES = ['Open', 'Confirmed', 'In progress', 'Fixed (needs retest)', 'Verified', "Won't fix", 'Duplicate'];
+const DECISION_STATUSES = ['Not decided', 'Proposed', 'Approved', 'Rejected', 'Superseded'];
+const ISSUE_STATUSES = ['Open', 'Confirmed', 'In progress', 'Fixed (needs retest)', 'Verified', "Won't fix", 'Duplicate'];
 export const ISSUE_OPEN = ['Open', 'Confirmed', 'In progress'];
 export const ISSUE_RETEST = ['Fixed (needs retest)'];
 export const ISSUE_CLOSED = ['Verified', "Won't fix", 'Duplicate'];
 /** Only the owner can sign these off. Claude may report, comment and say "fixed, please retest". */
 export const ISSUE_OWNER_ONLY = ['Verified', "Won't fix"];
-export const ISSUE_TYPES = ['Bug', 'Visual / UX', 'Performance', 'Docs', 'Question', 'Idea'];
+const ISSUE_TYPES = ['Bug', 'Visual / UX', 'Performance', 'Docs', 'Question', 'Idea'];
 export const SEVERITIES = ['Not set', 'Low', 'Medium', 'High', 'Blocker'];
-export const DEBT_STATUSES = ['Open', 'Planned', 'Resolved', 'Dismissed'];
+const DEBT_STATUSES = ['Open', 'Planned', 'Resolved', 'Dismissed'];
 export const DOC_SECTIONS = [
   'General', 'How the application is structured', 'Technical setup', 'Data storage', 'Integrations',
   'Feature descriptions', 'Known limitations', 'Future improvements', 'Technical issues', 'Important decisions',

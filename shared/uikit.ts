@@ -56,7 +56,7 @@ export const ELEMENTS: ElementDef[] = [
 
 /** Reserved properties on every element: "show only if" another element, earlier on the page, has a value. */
 export const LOOKS = ['hover', 'focused', 'selected', 'disabled'];
-export const COND_KEYS = ['if_el', 'if_op', 'if_val', 'if_join', 'if2_el', 'if2_op', 'if2_val'] as const;
+const COND_KEYS = ['if_el', 'if_op', 'if_val', 'if_join', 'if2_el', 'if2_op', 'if2_val'] as const;
 export const COND_OPS_BY_TYPE: Record<string, string[]> = {
   switch: ['is on', 'is off'], selector: ['is', 'is not'], dropdown: ['is', 'is not'],
   button: ['was pressed', 'was not pressed'], tabs: ['is', 'is not'], multipick: ['includes', 'does not include'], section: ['is open', 'is closed'], sidenav: ['is', 'is not'], state: ['is', 'is not'], disclosure: ['is open', 'is closed'], buttons: ['last pressed is', 'last pressed is not'],
@@ -66,7 +66,7 @@ export const COND_OPS_BY_TYPE: Record<string, string[]> = {
 /** Replace {name} with a sample value when one is given, leave it as {name} otherwise. */
 export const fillTokens = (text: string, samples: Record<string, string>) => text.replace(/\{([a-z0-9_]+)\}/gi, (m, k) => samples[k.toLowerCase()] ?? m);
 export const parseSamples = (s: string | undefined): Record<string, string> => Object.fromEntries((s ?? '').split(',').map((x) => x.split('=')).filter((a) => a.length >= 2 && a[0].trim()).map((a) => [a[0].trim().toLowerCase(), a.slice(1).join('=').trim()]));
-export const tokensIn = (els: El[]) => [...new Set(els.flatMap((e) => Object.values(e.props).flatMap((v) => [...v.matchAll(/\{([a-z0-9_]+)\}/gi)].map((m) => m[1].toLowerCase()))))];
+const tokensIn = (els: El[]) => [...new Set(els.flatMap((e) => Object.values(e.props).flatMap((v) => [...v.matchAll(/\{([a-z0-9_]+)\}/gi)].map((m) => m[1].toLowerCase()))))];
 
 export const splitOptions = (s: string | undefined) => (s ?? '').split(',').map((x) => x.trim()).filter(Boolean);
 
@@ -163,7 +163,7 @@ export function cleanConditions(all: El[]): El[] {
 }
 
 /** The current value of an element as a string, for conditions. */
-export function elementValue(el: El, get: (el: El, key: string) => string): string {
+function elementValue(el: El, get: (el: El, key: string) => string): string {
   const p = (k: string) => get(el, k);
   switch (el.type) {
     case 'switch': return p('on') === 'true' ? 'on' : 'off';

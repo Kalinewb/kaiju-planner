@@ -11,7 +11,7 @@ import { toast } from './toast.tsx';
 const KIND_ORDER = ['project', 'part', 'feature', 'decision'];
 const KIND_LABEL: Record<string, string> = { project: 'Project definition', part: 'Components', feature: 'Features', decision: 'Decisions' };
 
-export function useEntityPath(pid: string) {
+function useEntityPath(pid: string) {
   return (it: { id: string; kind: string }) =>
     it.kind === 'part' ? `/p/${pid}/n/${it.id}` : it.kind === 'feature' ? `/p/${pid}/features/${it.id}` : it.kind === 'decision' ? `/p/${pid}/decisions` : it.kind === 'project' ? `/p/${pid}/definition` : `/p/${pid}`;
 }

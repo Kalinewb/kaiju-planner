@@ -8,7 +8,7 @@ import type { Entity } from '../shared/schema.ts';
 import { HttpError } from './store.ts';
 import type { Store } from './store.ts';
 
-export const AI_MODELS = ['claude-sonnet-5-5', 'claude-opus-5-5', 'claude-haiku-5-5'];
+const AI_MODELS = ['claude-sonnet-5-5', 'claude-opus-5-5', 'claude-haiku-5-5'];
 const API_URL = 'https://api.anthropic.com/v1/messages';
 const MAX_MESSAGE = 8000;
 const HISTORY_LIMIT = 24;
@@ -70,7 +70,7 @@ Example. Owner: "I want to add a notification system." You: "Understood. You wan
 
 const FEATURE_FIELDS = ['name', 'description', 'problem', 'users', 'behavior', 'expected_result', 'requirements', 'acceptance', 'testing_plan'] as const;
 
-export const TOOLS = [
+const TOOLS = [
   {
     name: 'propose_feature',
     description: 'Show the owner a structured feature proposal. Only after you have asked enough questions. Use ONLY facts the owner stated. Leave a field out if the owner did not say it.',
@@ -111,7 +111,7 @@ const LINK_TOOL = {
 
 const clip = (s: string | undefined, n = 500) => { const t = (s ?? '').trim(); return t.length > n ? t.slice(0, n) + '…' : t; };
 
-export function buildContext(store: Store, project_id: string): string {
+function buildContext(store: Store, project_id: string): string {
   const p = store.get(project_id);
   const all = store.list({ project_id });
   const out: string[] = ['<project_data>'];

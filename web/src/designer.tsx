@@ -120,10 +120,10 @@ function Preview({ els, theme, selected, onSelect, get, set, asUser, width = 340
 }
 
 /** A page of a design drawn on its own, for comparing with a real screenshot. */
-export function PagePreview({ els, themeName = 'Notch', width }: { els: El[]; themeName?: string; width?: number }) {
+export function PagePreview({ els }: { els: El[] }) {
   const [demo, setDemo] = useState<Record<string, string>>({});
   const get: Get = (el, key) => demo[el.id + key] ?? el.props[key] ?? '';
-  return <div style={{ width: width ?? 340, maxWidth: '100%' }}><Preview els={els} theme={THEMES[themeName]} selected={null} onSelect={() => {}} get={get} set={(el, k, v) => setDemo((d) => ({ ...d, [el.id + k]: v }))} asUser /></div>;
+  return <div style={{ width: 340, maxWidth: '100%' }}><Preview els={els} theme={THEMES.Notch} selected={null} onSelect={() => {}} get={get} set={(el, k, v) => setDemo((d) => ({ ...d, [el.id + k]: v }))} asUser /></div>;
 }
 
 // ---------------------------------------------------------------- inspector

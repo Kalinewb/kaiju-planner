@@ -92,7 +92,7 @@ export function useAsync<T>(fn: () => Promise<T>, deps: unknown[]) {
     return () => { live = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [...deps, tick, version]);
-  return { data, error, reload: () => setTick((t) => t + 1), setData };
+  return { data, error, reload: () => setTick((t) => t + 1) };
 }
 
 export const fmtDate = (iso: string | null | undefined) => iso ? new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : '';

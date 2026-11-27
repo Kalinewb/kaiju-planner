@@ -23,7 +23,7 @@ function useStructureData(pid: string) {
   const pages = useAsync(() => api.list({ project: pid, kind: 'page' }), [pid]);
   const qas = useAsync(() => api.list({ project: pid, kind: 'qa' }), [pid]);
   const shots = useAsync(() => api.list({ project: pid, kind: 'shot' }), [pid]);
-  return { parts, feats, tasks, loaded: !!(parts.data && feats.data && tasks.data && issues.data), P: parts.data ?? [], F: feats.data ?? [], T: tasks.data ?? [], I: issues.data ?? [], PG: pages.data ?? [], QA: qas.data ?? [], SH: shots.data ?? [], reload: () => { parts.reload(); feats.reload(); tasks.reload(); issues.reload(); pages.reload(); qas.reload(); shots.reload(); } };
+  return { loaded: !!(parts.data && feats.data && tasks.data && issues.data), P: parts.data ?? [], F: feats.data ?? [], T: tasks.data ?? [], I: issues.data ?? [], PG: pages.data ?? [], QA: qas.data ?? [], SH: shots.data ?? [], reload: () => { parts.reload(); feats.reload(); tasks.reload(); issues.reload(); pages.reload(); qas.reload(); shots.reload(); } };
 }
 
 /** Add or edit a component in a side drawer. */
